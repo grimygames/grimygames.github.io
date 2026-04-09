@@ -1,1 +1,0 @@
-			TweenMax.to(".underlined", 2, {left:600});
