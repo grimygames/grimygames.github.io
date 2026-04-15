@@ -1006,3 +1006,27 @@ html, body {
 
 }
 
+/* 1. Reset: Hide the 'Online' text by default */
+.live-indicator.online {
+    display: none !important;
+}
+
+/* 2. State: If the link is live, HIDE the offline dot */
+.picarto-link.is-live .live-indicator.offline {
+    display: none !important;
+}
+
+/* 3. State: If the link is live, SHOW the 'LIVE NOW' text */
+.picarto-link.is-live .live-indicator.online {
+    display: block !important;
+    color: #ff0055 !important;
+    font-weight: bold;
+    animation: pulse-red 1.5s infinite;
+}
+
+/* 4. Ensure the animation exists */
+@keyframes pulse-red {
+    0% { opacity: 1; text-shadow: 0 0 5px #ff0055; }
+    50% { opacity: 0.5; text-shadow: 0 0 15px #ff0055; }
+    100% { opacity: 1; text-shadow: 0 0 5px #ff0055; }
+}
