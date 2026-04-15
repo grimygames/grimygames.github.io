@@ -469,12 +469,21 @@ html, body {
     border-radius: 50%;
     box-shadow: 0 0 15px #ff0055;
 }
-/* Hide 'LIVE NOW' by default */
-.live-indicator.online { display: none; }
+/* 1. Force the 'Offline' text to vanish when live */
+.picarto-link.is-live .live-indicator.offline {
+    display: none !important;
+}
 
-/* If parent has 'is-live', show 'online' and hide 'offline' */
-.is-live .live-indicator.online { display: block !important; }
-.is-live .live-indicator.offline { display: none !important; }
+/* 2. Force the 'LIVE NOW' text to appear when live */
+.picarto-link.is-live .live-indicator.online {
+    display: block !important;
+    color: #ff0055 !important; /* Ensuring the color stays hot pink */
+}
+
+/* 3. Make sure the 'Online' text is hidden by default when NOT live */
+.live-indicator.online {
+    display: none;
+}
 
 .footer {
   position: fixed;
@@ -967,12 +976,21 @@ html, body {
     box-shadow: 0 0 15px #ff0055;
 }
 
-/* Hide 'LIVE NOW' by default */
-.live-indicator.online { display: none; }
+/* 1. Force the 'Offline' text to vanish when live */
+.picarto-link.is-live .live-indicator.offline {
+    display: none !important;
+}
 
-/* If parent has 'is-live', show 'online' and hide 'offline' */
-.is-live .live-indicator.online { display: block !important; }
-.is-live .live-indicator.offline { display: none !important; }
+/* 2. Force the 'LIVE NOW' text to appear when live */
+.picarto-link.is-live .live-indicator.online {
+    display: block !important;
+    color: #ff0055 !important; /* Ensuring the color stays hot pink */
+}
+
+/* 3. Make sure the 'Online' text is hidden by default when NOT live */
+.live-indicator.online {
+    display: none;
+}
 
 
 .footer {
