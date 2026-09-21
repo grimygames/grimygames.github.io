@@ -1,5 +1,3 @@
-
-
 <html class="" lang="en"><head>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-NDV1ZE33D4"></script>
@@ -41,40 +39,24 @@
 		<!-- Page Content -->
 		<div class="container">
 		<div class="container mainContainer">
-		 <div onclick="topFunction()" id="myBtn" title="Go to top"></div>		 
+		 <div onclick="topFunction()" id="myBtn" title="Go to top"></div>  
 		<!-------------------------- DESKTOP --------------------------------------------->	
 					<div class="container-fluid desktop ">
 
 
 					  <!-- motion -->
 						<div class="row portfolio allContent content">
-							<div class="row">
-								<div class="col-sm-2" style="padding-top: 50px">
-								</div>
-								<div class="col-sm-8" style="padding-top: 50px">
-									<a href="https://grimygames.com/"><img style="width:100%; margin:auto;" class="iconHov" id="fromTop" src="img\banners\mographic-banner.png" alt="Grimygames.com logo"></a>
-								</div>
-								<div class="col-sm-2" style="padding-top: 50px">
-								</div>
-							</div>
-
-							<div class="row">
-								<div class="col-sm-12" style="padding-top: 20px; text-align: center;">
-									<div style="max-width: 500px; margin: 0 auto;">
-										<a href="https://grimygames.itch.io/super-dumpster-dive" target="_blank">
-											<img class="iconHov" src="img/logoStatic.png" style="width: 100%; border-radius: 4px;" alt="Super Dumpster Dive Pre-Alpha">
-										</a>
-										<p style="color: grey; font-family: 'Raleway', sans-serif; font-size: 16px; margin-top: 10px;">
-											<strong>Super Dumpster Dive</strong><br>
-											Play the pre-alpha build now on itch.io!
-										</p>
-									</div>
-								</div>
-							</div>
 							
-							<div class="row">
-								<div class="col-sm-12" style="padding-top: 15px; text-align: center;">
-									
+							<!-- TOP HEADER ROW -->
+							<div class="row" style="padding-top: 50px; display: flex; align-items: center; justify-content: center; flex-wrap: wrap;">
+								
+								<!-- LEFT: MAIN LOGO -->
+								<div class="col-sm-4" style="text-align: center; padding-bottom: 20px;">
+									<a href="https://grimygames.com/"><img style="width:100%; max-width: 400px; margin:auto;" class="iconHov" id="fromTop" src="img\banners\mographic-banner.png" alt="Grimygames.com logo"></a>
+								</div>
+
+								<!-- MIDDLE: SOCIAL AREA -->
+								<div class="col-sm-4" style="text-align: center; padding-bottom: 20px;">
 									<div>
 										<a href="https://picarto.tv/GrimyGames/profile" class="list-group-item Portfolio picarto-link" id="BounceUp" target="_blank" style="display: inline-block; float: none; border: none; padding: 5px; background: transparent;">
 											<img class="iconHov" src="img/icon/picarto.png" style="width:56px;">
@@ -96,7 +78,6 @@
 											<img class="iconHov" src="img/icon/ko-fi.png" style="width:56px;">
 										</a>
 									</div>
-
 									<div>
 										<a href="https://www.tiktok.com/@grimygames" class="list-group-item Portfolio" id="BounceUp5" target="_blank" style="display: inline-block; float: none; border: none; padding: 5px; background: transparent;">
 											<img class="iconHov" src="img/icon/tiktok.png" style="width:56px;">
@@ -114,14 +95,23 @@
 											<img class="iconHov" src="img/icon/instagram.png" style="width:56px;">
 										</a>														
 									</div>
-									
-									<!-- <div style="margin-bottom: 10px;">
-										<a href="https://grimygames.itch.io/" class="list-group-item Portfolio" id="BounceUp10" target="_blank" style="display: inline-block; float: none; border: none; padding: 5px; background: transparent;">
-											<img class="iconHov" src="img/icon/itch-full.png" style="width:256px;">
-										</a>
-									</div> -->
 								</div>
-							</div>							
+
+								<!-- RIGHT: DUMPSTER DIVE LOGO -->
+								<div class="col-sm-4" style="text-align: center; padding-bottom: 20px;">
+									<div style="max-width: 300px; margin: 0 auto;">
+										<a href="https://grimygames.itch.io/super-dumpster-dive" target="_blank">
+											<img class="iconHov" src="img/logoStatic.png" style="width: 100%; border-radius: 4px;" alt="Super Dumpster Dive Pre-Alpha">
+										</a>
+										<p style="color: grey; font-family: 'Raleway', sans-serif; font-size: 16px; margin-top: 10px;">
+											<strong>Super Dumpster Dive</strong><br>
+											Play the pre-alpha build now on itch.io!
+										</p>
+									</div>
+								</div>
+
+							</div>
+							
 							<div class="row">
 								<div class="col-sm-12" style="padding-top: 10px; text-align: center;">
 									<p style="color:grey; font-family: 'Raleway', sans-serif; font-size: 18px; letter-spacing: 1px; line-height: 1.5; width:100%; margin: 0 auto;" id="fromBottom">
@@ -165,7 +155,6 @@
 
 								</div>
 							</div>
-						
 							
 							<div class="row">
 								<div class="col-sm-12" style="padding-top: 25px; padding-left: 180px">
@@ -400,13 +389,10 @@
 		<script type="text/javascript">
 			/* var mobile = (/iphone|nokia|netfront|panasonic|sharp|240x320|midp|sie-|symbian|opera mini|mda|mot-|windows ce|benq|pocket pc|sagem|samsung|sda|sgh-|vodaphone|xda|ipod|ipad|android|blackberry|ipad|mini|windows\sce|palm/i.test(navigator.userAgent.toLowerCase()));  
 			if (mobile) {  
-				$('.desktop').hide();
-				$('.mobile').show();	
+				$('.desktop').hide();$('.mobile').show();	
 			} */
-			$(window).load(function() {
-				$('.allContent').fadeOut("fast");
-				$('.contact').fadeIn('slow');
-				$('.Portfolio').fadeIn('slow');
+			$(window).load(function() {$('.allContent').fadeOut("fast");
+				$('.contact').fadeIn('slow');$('.Portfolio').fadeIn('slow');
 				
 			});
 			$( document ).ready(function() {
@@ -468,8 +454,7 @@
 					$('#photo').transition('tada');
 				});
 				
-				$('.scale').hover(function() {
-				$(this).addClass('transition');
+				$('.scale').hover(function() {$(this).addClass('transition');
 				
 				}, function() {
 					$(".scale").removeClass('transition');
@@ -479,37 +464,28 @@
 
 				$('#rect').pan({fps: 20, speed: 2, dir: 'left'});		
 				  //Categorise
-				$('.allThumbs').fadeIn('Slow');
-				$('.Portfolio').click( function(){
-						$('.allContent').fadeOut('fast');
-						$('.portfolio').fadeIn('slow');
+				$('.allThumbs').fadeIn('Slow');$('.Portfolio').click( function(){
+						$('.allContent').fadeOut('fast');$('.portfolio').fadeIn('slow');
 						//$("div#extraControls").removeClass("hidden");
 						//TweenMax.staggerFrom("#BounceUp3", 1.2, {opacity:0, y:200, ease:Back.easeOut}, 0.1);
 						});
-				$('.Contact').click( function(){
-						$('.allContent').fadeOut('fast');
-						$('.contact').fadeIn('slow');
-						$('.contactThumbs').fadeIn('slow');
+				$('.Contact').click( function(){$('.allContent').fadeOut('fast');
+						$('.contact').fadeIn('slow');$('.contactThumbs').fadeIn('slow');
 						});
 				$('.Resume').click( function(){ 
-						$('.allContent').fadeOut('fast');
-						$('.resume').fadeIn('slow');
+						$('.allContent').fadeOut('fast');$('.resume').fadeIn('slow');
 						TweenMax.staggerFrom("#BounceUp_Resume1", 1.3, {opacity:0, y:200, ease:Back.easeOut}, 0.1);					
 						});
 				$('.Web').click( function(){ 
-						$('.allContent').fadeOut('fast');
-						$('.web').fadeIn('slow');				
+						$('.allContent').fadeOut('fast');$('.web').fadeIn('slow');				
 						});
 				$('.Graphic').click( function(){ 
-						$('.allContent').fadeOut('fast');
-						$('.graphic').fadeIn('slow');				
+						$('.allContent').fadeOut('fast');$('.graphic').fadeIn('slow');				
 						});
 				$('.Game').click( function(){ 
-						$('.allContent').fadeOut('fast');
-						$('.game').fadeIn('slow');				
+						$('.allContent').fadeOut('fast');$('.game').fadeIn('slow');				
 						});
-				$('.All').click( function(){
-						$('.allThumbs').fadeIn('Slow');
+				$('.All').click( function(){$('.allThumbs').fadeIn('Slow');
 						});
 										
 				
