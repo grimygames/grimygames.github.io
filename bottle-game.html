@@ -82,13 +82,13 @@ const ASSETS_CONFIG = {
         bottleSlide:  'audio/bottle-slide.wav',     // Sound when bottle slides in/out
         winDing:      'audio/success.wav',          // Sound on perfect pour
         failSmash:    'audio/bottle-toss.wav'       // Sound when bottle is tossed
-    },
+		},
     gameplay: {
-        fillSpeed: 62,        // How fast liquid rises (% per second)
-        minTargetStart: 20,   // Lowest % the bottom target line can spawn
-        maxTargetStart: 78,   // Highest % the bottom target line can spawn
-        minWindowSize: 6,     // Tightest gap between the two target lines (%)
-        maxWindowSize: 12     // Widest gap between the two target lines (%)
+        fillSpeed: 62,        
+        minTargetStart: 20,   
+        maxTargetStart: 78,   
+        minWindowSize: 6,     
+        maxWindowSize: 12     
     },
     bottleMetrics: {
         pourBottleRestX: 208, 
@@ -109,7 +109,7 @@ const GLOBAL_API_NAMESPACE = 'grimygames_com';
 const GLOBAL_API_KEY = 'molotov_bottles_filled';
 
 // ============================================================================
-// 2. LOCAL DRIVE (file://) PRELOADER FOR IMAGES, AUDIO & FONT
+// 2. LOCAL DRIVE (file://) PRELOADER
 // ============================================================================
 const LOADED_HTML_IMAGES = {};
 const LOADED_HTML_AUDIO = {};
@@ -157,11 +157,9 @@ function preloadLocalAssets(onReady) {
         const img = new Image();
         img.onload = () => {
             LOADED_HTML_IMAGES[key] = img;
-            console.log(`[GrimyPour] Loaded custom image: ${cleanPath}`);
             checkDone();
         };
         img.onerror = () => {
-            console.warn(`[GrimyPour] Custom image not found at "${cleanPath}" - using built-in placeholder.`);
             checkDone();
         };
         img.src = cleanPath;
@@ -201,7 +199,6 @@ class PourGame extends Phaser.Scene {
         // 2. TOP HUD BAR
         this.add.image(150, 18, 'topBarBg').setDisplaySize(300, 36).setDepth(25);
 
-        // Customizable Credits Image Button (Top Left - Reduced Size)
         this.creditsBtn = this.add.image(34, 18, 'creditsBtn')
             .setDisplaySize(48, 16)
             .setInteractive({ useHandCursor: true })
@@ -212,7 +209,6 @@ class PourGame extends Phaser.Scene {
             this.openCredits();
         });
 
-        // Feed Status Text
         this.statusText = this.add.text(150, 18, 'HOLD TO POUR', {
             fontFamily: '"Raleway", sans-serif',
             fontSize: '14px',
@@ -220,7 +216,6 @@ class PourGame extends Phaser.Scene {
             fontStyle: 'bold'
         }).setOrigin(0.5).setDepth(26);
 
-        // Mute Button (Top Right)
         this.muteBtn = this.add.image(280, 18, this.isMuted ? 'muteOn' : 'muteOff')
             .setDisplaySize(24, 24)
             .setInteractive({ useHandCursor: true })
@@ -232,7 +227,6 @@ class PourGame extends Phaser.Scene {
         });
 
         // 3. BOTTOM HUD
-        // Left Score
         this.add.image(45, 233, 'playerIcon').setDisplaySize(16, 16).setDepth(21);
         this.playerScoreText = this.add.text(58, 233, `${this.playerScore}`, {
             fontFamily: '"Raleway", sans-serif',
@@ -243,10 +237,8 @@ class PourGame extends Phaser.Scene {
             fontStyle: 'bold'
         }).setOrigin(0, 0.5).setDepth(21);
 
-        // Main Game Logo
         this.add.image(150, 233, 'logo').setDisplaySize(68, 24).setDepth(20);
 
-        // Right Score
         this.add.image(205, 233, 'worldIcon').setDisplaySize(16, 16).setDepth(21);
         this.worldScoreText = this.add.text(218, 233, `${this.worldScore}`, {
             fontFamily: '"Raleway", sans-serif',
@@ -273,7 +265,15 @@ class PourGame extends Phaser.Scene {
         // 7. Credits Modal UI System
         this.buildCreditsModal();
 
-        // 8. Input Listeners
+        // 8. Server Polling (Checks World Score every 10 seconds)
+        this.time.addEvent({
+            delay: 10000,
+            callback: this.fetchWorldScore,
+            callbackScope: this,
+            loop: true
+        });
+
+        // 9. Input Listeners
         this.input.on('pointerdown', (pointer, currentlyOver) => {
             if (this.isModalOpen) return;
             if (currentlyOver.includes(this.muteBtn) || currentlyOver.includes(this.creditsBtn)) return;
@@ -291,16 +291,10 @@ class PourGame extends Phaser.Scene {
     buildCreditsModal() {
         this.creditsModal = this.add.container(0, 0).setDepth(100).setVisible(false);
 
-        // Dark dimming overlay
         const overlay = this.add.rectangle(150, 125, 300, 250, 0x000000, 0.88).setInteractive();
-        
-        // Modal Panel Background Image (Centered)
         const panel = this.add.image(150, 125, 'creditsBg').setDisplaySize(260, 200);
-
-        // Larger Custom Logo just for the Credits screen (Centered inside upper half)
         const modalLogo = this.add.image(150, 70, 'creditsLogo').setDisplaySize(140, 50);
 
-        // Custom Close Button (X) Image
         const closeBtn = this.add.image(265, 40, 'closeBtn')
             .setDisplaySize(24, 24)
             .setInteractive({ useHandCursor: true });
@@ -312,7 +306,6 @@ class PourGame extends Phaser.Scene {
 
         this.creditsModal.add([overlay, panel, modalLogo, closeBtn]);
 
-        // Credits text generation (Centered directly below the logo)
         let startY = 120;
         ASSETS_CONFIG.credits.forEach(lineText => {
             let txt = this.add.text(150, startY, lineText, {
@@ -355,16 +348,10 @@ class PourGame extends Phaser.Scene {
 
         this.targetBottle = this.add.container(startX, m.bottleY).setDepth(8);
 
-        // Layer 1: Liquid
         this.liquidGraphics = this.add.graphics();
-
-        // Layer 2: Cloth Wick
         this.clothSprite = this.add.image(0, m.clothStartY, 'cloth').setDisplaySize(24, 84).setAlpha(0);
-
-        // Layer 3: Glass Bottle
         const bottleSprite = this.add.image(0, 0, 'targetBottle').setDisplaySize(56, 94);
 
-        // Layer 4: Lines
         const minLineY = m.liquidBottomY - (this.targetMin / 100) * m.liquidMaxHeight;
         const maxLineY = m.liquidBottomY - (this.targetMax / 100) * m.liquidMaxHeight;
 
@@ -603,9 +590,6 @@ class PourGame extends Phaser.Scene {
         } catch (e) {}
     }
 
-    // ========================================================================
-    // PLACEHOLDER GRAPHICS
-    // ========================================================================
     createFallbackTextures() {
         const g = this.make.graphics({ x: 0, y: 0, add: false });
 
@@ -774,13 +758,13 @@ class PourGame extends Phaser.Scene {
             if (res.ok) {
                 const data = await res.json();
                 if (typeof data.count === 'number') {
-                    this.worldScore = data.count;
+                    this.worldScore = Math.max(this.worldScore, data.count);
                     this.worldScoreText.setText(`${this.worldScore}`);
                 }
             }
         } catch (e) {
             const savedWorld = parseInt(localStorage.getItem('grimy_world_fallback')) || 1337;
-            this.worldScore = savedWorld;
+            this.worldScore = Math.max(this.worldScore, savedWorld);
             this.worldScoreText.setText(`${this.worldScore}`);
         }
     }
@@ -795,7 +779,7 @@ class PourGame extends Phaser.Scene {
             if (res.ok) {
                 const data = await res.json();
                 if (typeof data.count === 'number') {
-                    this.worldScore = data.count;
+                    this.worldScore = Math.max(this.worldScore, data.count);
                     this.worldScoreText.setText(`${this.worldScore}`);
                 }
             }
