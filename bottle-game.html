@@ -173,7 +173,7 @@ class PourGame extends Phaser.Scene {
     constructor() {
         super('PourGame');
         this.playerScore = parseInt(localStorage.getItem('grimy_pour_score')) || 0;
-        this.worldScore = 1337;
+        this.worldScore = 0; // Starts at 0 so it pulls the true number from the internet
         this.isMuted = localStorage.getItem('grimy_pour_muted') === 'true';
         this.isPouring = false;
         this.canInteract = false;
@@ -240,7 +240,7 @@ class PourGame extends Phaser.Scene {
         this.add.image(150, 233, 'logo').setDisplaySize(68, 24).setDepth(20);
 
         this.add.image(205, 233, 'worldIcon').setDisplaySize(16, 16).setDepth(21);
-        this.worldScoreText = this.add.text(218, 233, `${this.worldScore}`, {
+        this.worldScoreText = this.add.text(218, 233, `...`, { // Starts with dots until loaded
             fontFamily: '"Raleway", sans-serif',
             fontSize: '14px',
             color: '#ffffff',
@@ -763,7 +763,7 @@ class PourGame extends Phaser.Scene {
                 }
             }
         } catch (e) {
-            const savedWorld = parseInt(localStorage.getItem('grimy_world_fallback')) || 1337;
+            const savedWorld = parseInt(localStorage.getItem('grimy_world_fallback')) || 0;
             this.worldScore = Math.max(this.worldScore, savedWorld);
             this.worldScoreText.setText(`${this.worldScore}`);
         }
