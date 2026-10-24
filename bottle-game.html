@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Grimy Pour</title>
+    <!-- Google Font: Raleway (Matches your website) -->
+    <link href="https://fonts.googleapis.com/css?family=Raleway:900" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            background-color: transparent; /* Allows site background to show around border */
+            font-family: 'Raleway', sans-serif;
+        }
+        #game-container {
+            width: 300px;
+            height: 250px;
+            position: relative;
+            border: 2px solid #222;
+            box-sizing: content-box; /* Pushes the border outside so canvas doesn't get cut off */
+            transition: border-color 0.3s ease;
+        }
+        #game-container:hover {
+            border-color: #000000; /* Turns Black on hover */
+        }
+        /* Pre-warms the Google font so Canvas renders it immediately */
+        .font-preload {
+            font-family: 'Raleway', sans-serif;
+            position: absolute;
+            left: -9999px;
+            visibility: hidden;
+        }
+    </style>
+</head>
+<body>
+
+<div class="font-preload">.</div>
+<div id="game-container"></div>
+
+<script>
+// ============================================================================
+// 1. EASY ASSET & GAME CONFIGURATION (WORKS ON D:\ DRIVE AND WEB SERVER)
+// ============================================================================
+const ASSETS_CONFIG = {
+    // EASILY ADD OR CHANGE YOUR CREDITS HERE (Each line is a new line of text)
+    credits: [
+        "A game by GrimyGames.com",
+        "Code & Logic: Google Gemini",
+        "Sound FX: Freesound.org",
+        "Art & Assets: Dirty Danny"
+    ],
+    images: {
+        background:   'img/game/bg.png',            // 300x250 background art
+        topBarBg:     'img/game/top-bar-bg.png',    // 300x36 top status bar background image
+        logo:         'img/game/logo.png',          // Bottom-center game logo (68x24)
+        creditsBg:    'img/game/credits-bg.png',    // Modal popup background (260x200)
+        creditsLogo:  'img/game/credits-logo.png',  // Larger logo for the credits menu (140x50)
+        creditsBtn:   'img/game/credits-btn.png',   // Button to open credits (48x16)
+        closeBtn:     'img/game/close-btn.png',     // Button to close credits (24x24)
+        scoreBgLeft:  'img/game/score-bg-left.png', // Left score badge (106x26)
+        scoreBgRight: 'img/game/score-bg-right.png',// Right score badge (106x26)
+        playerIcon:   'img/game/player-icon.png',   // Small face icon next to player score (16x16)
+        worldIcon:    'img/game/world-icon.png',    // Small globe icon next to world score (16x16)
+        pourBottle:   'img/game/pour-bottle.png',   // Top pouring bottle (40x72)
+        targetBottle: 'img/game/glass-bottle.png',  // Target glass bottle (56x94)
+        cloth:        'img/game/cloth-wick.png',    // Cloth rag wick (24x84)
+        targetLine:   'img/game/target-line.png',   // Target line marker (52x3)
+        muteOn:       'img/game/mute-on.png',       // Muted icon (24x24)
+        muteOff:      'img/game/mute-off.png'       // Unmuted icon (24x24)
+    },
+    audio: {
+        pourLoop:     'audio/pour-loop.wav',        // Looping pour sound
+        clothDrop:    'audio/cloth-stuff.wav',      // Sound when cloth drops in
+        bottleSlide:  'audio/bottle-slide.wav',     // Sound when bottle slides in/out
+        winDing:      'audio/success.wav',          // Sound on perfect pour
+        failSmash:    'audio/bottle-toss.wav'       // Sound when bottle is tossed
+    },
+    gameplay: {
+        fillSpeed: 62,        // How fast liquid rises (% per second)
+        minTargetStart: 20,   // Lowest % the bottom target line can spawn
+        maxTargetStart: 78,   // Highest % the bottom target line can spawn
+        minWindowSize: 6,     // Tightest gap between the two target lines (%)
+        maxWindowSize: 12     // Widest gap between the two target lines (%)
+    },
+    bottleMetrics: {
+        pourBottleRestX: 208, 
+        pourBottleRestY: 82,  
+        pourBottleTiltX: 179, 
+        pourBottleTiltY: 86, 
+        bottleX: 150,
+        bottleY: 154,         
+        liquidBottomY: 42,    
+        liquidMaxHeight: 58,  
+        liquidWidth: 42,      
+        clothStartY: -110,    
+        clothEndY: -35        
+    }
+};
+
+const GLOBAL_API_NAMESPACE = 'grimygames_com';
+const GLOBAL_API_KEY = 'molotov_bottles_filled';
+
+// ============================================================================
+// 2. LOCAL DRIVE (file://) PRELOADER FOR IMAGES, AUDIO & FONT
+// ============================================================================
+const LOADED_HTML_IMAGES = {};
+const LOADED_HTML_AUDIO = {};
+
+function preloadLocalAssets(onReady) {
+    const imgEntries = Object.entries(ASSETS_CONFIG.images);
+    let remaining = imgEntries.length;
+
+    Object.entries(ASSETS_CONFIG.audio).forEach(([key, path]) => {
+        if (!path) return;
+        const cleanPath = path.replace(/\\/g, '/');
+        const audio = new Audio();
+        audio.src = cleanPath;
+        audio.preload = 'auto';
+        audio.addEventListener('canplaythrough', () => {
+            LOADED_HTML_AUDIO[key] = audio;
+        }, { once: true });
+        audio.addEventListener('error', () => {}, { once: true });
+    });
+
+    const startWhenFontReady = () => {
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(() => onReady()).catch(() => onReady());
+        } else {
+            onReady();
+        }
+    };
+
+    if (remaining === 0) {
+        startWhenFontReady();
+        return;
+    }
+
+    const checkDone = () => {
+        remaining--;
+        if (remaining <= 0) startWhenFontReady();
+    };
+
+    imgEntries.forEach(([key, path]) => {
+        if (!path) {
+            checkDone();
+            return;
+        }
+        const cleanPath = path.replace(/\\/g, '/');
+        const img = new Image();
+        img.onload = () => {
+            LOADED_HTML_IMAGES[key] = img;
+            console.log(`[GrimyPour] Loaded custom image: ${cleanPath}`);
+            checkDone();
+        };
+        img.onerror = () => {
+            console.warn(`[GrimyPour] Custom image not found at "${cleanPath}" - using built-in placeholder.`);
+            checkDone();
+        };
+        img.src = cleanPath;
+    });
+}
+
+// ============================================================================
+// 3. MAIN PHASER GAME SCENE
+// ============================================================================
+class PourGame extends Phaser.Scene {
+    constructor() {
+        super('PourGame');
+        this.playerScore = parseInt(localStorage.getItem('grimy_pour_score')) || 0;
+        this.worldScore = 1337;
+        this.isMuted = localStorage.getItem('grimy_pour_muted') === 'true';
+        this.isPouring = false;
+        this.canInteract = false;
+        this.isModalOpen = false;
+        this.fillLevel = 0;
+        this.targetMin = 50;
+        this.targetMax = 60;
+    }
+
+    create() {
+        Object.entries(LOADED_HTML_IMAGES).forEach(([key, imgElement]) => {
+            if (!this.textures.exists(key)) {
+                this.textures.addImage(key, imgElement);
+            }
+        });
+
+        this.createFallbackTextures();
+        this.fetchWorldScore();
+
+        // 1. Background Art
+        this.add.image(150, 125, 'background').setDisplaySize(300, 250).setDepth(0);
+
+        // 2. TOP HUD BAR
+        this.add.image(150, 18, 'topBarBg').setDisplaySize(300, 36).setDepth(25);
+
+        // Customizable Credits Image Button (Top Left - Reduced Size)
+        this.creditsBtn = this.add.image(34, 18, 'creditsBtn')
+            .setDisplaySize(48, 16)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(27);
+
+        this.creditsBtn.on('pointerdown', (pointer, localX, localY, event) => {
+            event.stopPropagation();
+            this.openCredits();
+        });
+
+        // Feed Status Text
+        this.statusText = this.add.text(150, 18, 'HOLD TO POUR', {
+            fontFamily: '"Raleway", sans-serif',
+            fontSize: '14px',
+            color: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(26);
+
+        // Mute Button (Top Right)
+        this.muteBtn = this.add.image(280, 18, this.isMuted ? 'muteOn' : 'muteOff')
+            .setDisplaySize(24, 24)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(27);
+
+        this.muteBtn.on('pointerdown', (pointer, localX, localY, event) => {
+            event.stopPropagation();
+            this.toggleMute();
+        });
+
+        // 3. BOTTOM HUD
+        // Left Score
+        this.add.image(45, 233, 'playerIcon').setDisplaySize(16, 16).setDepth(21);
+        this.playerScoreText = this.add.text(58, 233, `${this.playerScore}`, {
+            fontFamily: '"Raleway", sans-serif',
+            fontSize: '14px',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 2,
+            fontStyle: 'bold'
+        }).setOrigin(0, 0.5).setDepth(21);
+
+        // Main Game Logo
+        this.add.image(150, 233, 'logo').setDisplaySize(68, 24).setDepth(20);
+
+        // Right Score
+        this.add.image(205, 233, 'worldIcon').setDisplaySize(16, 16).setDepth(21);
+        this.worldScoreText = this.add.text(218, 233, `${this.worldScore}`, {
+            fontFamily: '"Raleway", sans-serif',
+            fontSize: '14px',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 2,
+            fontStyle: 'bold'
+        }).setOrigin(0, 0.5).setDepth(21);
+
+        // 4. Pouring Stream Graphics
+        this.streamGraphics = this.add.graphics().setDepth(6);
+
+        // 5. Top Pouring Bottle 
+        const m = ASSETS_CONFIG.bottleMetrics;
+        this.pourer = this.add.image(m.pourBottleRestX, m.pourBottleRestY, 'pourBottle')
+            .setDisplaySize(40, 72)
+            .setDepth(12);
+        this.pourer.setAngle(-25);
+
+        // 6. Spawn First Target Bottle
+        this.spawnTargetBottle(false);
+
+        // 7. Credits Modal UI System
+        this.buildCreditsModal();
+
+        // 8. Input Listeners
+        this.input.on('pointerdown', (pointer, currentlyOver) => {
+            if (this.isModalOpen) return;
+            if (currentlyOver.includes(this.muteBtn) || currentlyOver.includes(this.creditsBtn)) return;
+            this.startPour();
+        });
+        this.input.on('pointerup', () => {
+            if (this.isModalOpen) return;
+            this.stopPour();
+        });
+        this.input.on('pointerout', () => {
+            if (this.isPouring) this.stopPour();
+        });
+    }
+
+    buildCreditsModal() {
+        this.creditsModal = this.add.container(0, 0).setDepth(100).setVisible(false);
+
+        // Dark dimming overlay
+        const overlay = this.add.rectangle(150, 125, 300, 250, 0x000000, 0.88).setInteractive();
+        
+        // Modal Panel Background Image (Centered)
+        const panel = this.add.image(150, 125, 'creditsBg').setDisplaySize(260, 200);
+
+        // Larger Custom Logo just for the Credits screen (Centered inside upper half)
+        const modalLogo = this.add.image(150, 70, 'creditsLogo').setDisplaySize(140, 50);
+
+        // Custom Close Button (X) Image
+        const closeBtn = this.add.image(265, 40, 'closeBtn')
+            .setDisplaySize(24, 24)
+            .setInteractive({ useHandCursor: true });
+
+        closeBtn.on('pointerdown', (pointer, localX, localY, event) => {
+            event.stopPropagation();
+            this.closeCredits();
+        });
+
+        this.creditsModal.add([overlay, panel, modalLogo, closeBtn]);
+
+        // Credits text generation (Centered directly below the logo)
+        let startY = 120;
+        ASSETS_CONFIG.credits.forEach(lineText => {
+            let txt = this.add.text(150, startY, lineText, {
+                fontFamily: '"Raleway", sans-serif',
+                fontSize: '11px',
+                color: '#cccccc',
+                align: 'center'
+            }).setOrigin(0.5);
+            this.creditsModal.add(txt);
+            startY += 24; 
+        });
+    }
+
+    openCredits() {
+        if (this.isPouring) this.stopPour();
+        this.isModalOpen = true;
+        this.creditsModal.setVisible(true);
+        this.creditsModal.setAlpha(0);
+        this.tweens.add({ targets: this.creditsModal, alpha: 1, duration: 150 });
+    }
+
+    closeCredits() {
+        this.isModalOpen = false;
+        this.creditsModal.setVisible(false);
+    }
+
+    randomizeTargetRange() {
+        const cfg = ASSETS_CONFIG.gameplay;
+        const windowSize = Phaser.Math.Between(cfg.minWindowSize, cfg.maxWindowSize);
+        this.targetMin = Phaser.Math.Between(cfg.minTargetStart, cfg.maxTargetStart);
+        this.targetMax = this.targetMin + windowSize;
+    }
+
+    spawnTargetBottle(slideIn = true) {
+        this.fillLevel = 0;
+        this.randomizeTargetRange();
+
+        const m = ASSETS_CONFIG.bottleMetrics;
+        const startX = slideIn ? 360 : m.bottleX;
+
+        this.targetBottle = this.add.container(startX, m.bottleY).setDepth(8);
+
+        // Layer 1: Liquid
+        this.liquidGraphics = this.add.graphics();
+
+        // Layer 2: Cloth Wick
+        this.clothSprite = this.add.image(0, m.clothStartY, 'cloth').setDisplaySize(24, 84).setAlpha(0);
+
+        // Layer 3: Glass Bottle
+        const bottleSprite = this.add.image(0, 0, 'targetBottle').setDisplaySize(56, 94);
+
+        // Layer 4: Lines
+        const minLineY = m.liquidBottomY - (this.targetMin / 100) * m.liquidMaxHeight;
+        const maxLineY = m.liquidBottomY - (this.targetMax / 100) * m.liquidMaxHeight;
+
+        const bottomLine = this.add.image(0, minLineY, 'targetLine').setDisplaySize(52, 3);
+        const topLine = this.add.image(0, maxLineY, 'targetLine').setDisplaySize(52, 3);
+
+        this.targetBottle.add([
+            this.liquidGraphics,
+            this.clothSprite,
+            bottleSprite,
+            bottomLine,
+            topLine
+        ]);
+
+        if (slideIn) {
+            this.playSound('bottleSlide');
+            this.tweens.add({
+                targets: this.targetBottle,
+                x: m.bottleX,
+                duration: 360,
+                ease: 'Back.easeOut',
+                onComplete: () => {
+                    this.canInteract = true;
+                    this.statusText.setText('HOLD TO POUR').setColor('#ffffff');
+                }
+            });
+        } else {
+            this.canInteract = true;
+        }
+    }
+
+    startPour() {
+        if (!this.canInteract || this.isModalOpen) return;
+        this.isPouring = true;
+        this.statusText.setText('RELEASE BETWEEN LINES!').setColor('#ffff00');
+        this.playSound('pourLoop', true);
+
+        const m = ASSETS_CONFIG.bottleMetrics;
+        this.tweens.killTweensOf(this.pourer);
+        this.tweens.add({
+            targets: this.pourer,
+            angle: -108,
+            x: m.pourBottleTiltX,
+            y: m.pourBottleTiltY,
+            duration: 120,
+            ease: 'Quad.easeOut'
+        });
+    }
+
+    stopPour() {
+        if (!this.isPouring) return;
+        this.isPouring = false;
+        this.canInteract = false;
+        this.streamGraphics.clear();
+        this.stopSound('pourLoop');
+
+        const m = ASSETS_CONFIG.bottleMetrics;
+        this.tweens.killTweensOf(this.pourer);
+        this.tweens.add({
+            targets: this.pourer,
+            angle: -25,
+            x: m.pourBottleRestX,
+            y: m.pourBottleRestY,
+            duration: 180,
+            ease: 'Quad.easeOut'
+        });
+
+        this.evaluatePour();
+    }
+
+    update(time, delta) {
+        if (!this.isPouring) return;
+
+        this.fillLevel += (ASSETS_CONFIG.gameplay.fillSpeed * delta) / 1000;
+
+        const m = ASSETS_CONFIG.bottleMetrics;
+        this.streamGraphics.clear();
+        this.streamGraphics.lineStyle(4, 0xffaa00, 0.9);
+        const jitter = Phaser.Math.Between(-1, 1);
+        this.streamGraphics.lineBetween(m.bottleX + jitter, 90, m.bottleX, m.bottleY + m.liquidBottomY - 2);
+
+        this.drawLiquid();
+
+        if (this.fillLevel >= 105) {
+            this.stopPour();
+        }
+    }
+
+    drawLiquid() {
+        const m = ASSETS_CONFIG.bottleMetrics;
+        this.liquidGraphics.clear();
+
+        const clampedFill = Phaser.Math.Clamp(this.fillLevel, 0, 105);
+        const currentHeight = (clampedFill / 100) * m.liquidMaxHeight;
+
+        const inZone = (this.fillLevel >= this.targetMin && this.fillLevel <= this.targetMax);
+        const liquidColor = inZone ? 0x00ffcc : 0xffaa00;
+
+        this.liquidGraphics.fillStyle(liquidColor, 0.85);
+        this.liquidGraphics.fillRoundedRect(
+            -m.liquidWidth / 2,
+            m.liquidBottomY - currentHeight,
+            m.liquidWidth,
+            currentHeight,
+            4
+        );
+    }
+
+    evaluatePour() {
+        if (this.fillLevel >= this.targetMin && this.fillLevel <= this.targetMax) {
+            this.handleSuccess();
+        } else {
+            this.handleFail();
+        }
+    }
+
+    handleSuccess() {
+        this.statusText.setText('PERFECT FILL!').setColor('#00ffcc');
+        this.playSound('winDing');
+
+        this.playerScore++;
+        localStorage.setItem('grimy_pour_score', this.playerScore);
+        this.playerScoreText.setText(`${this.playerScore}`);
+        this.incrementWorldScore();
+
+        const m = ASSETS_CONFIG.bottleMetrics;
+
+        this.playSound('clothDrop');
+        this.tweens.add({
+            targets: this.clothSprite,
+            y: m.clothEndY,
+            alpha: 1,
+            duration: 260,
+            ease: 'Bounce.easeOut',
+            onComplete: () => {
+                this.time.delayedCall(160, () => this.playSound('bottleSlide'));
+                this.tweens.add({
+                    targets: this.targetBottle,
+                    x: -80,
+                    duration: 340,
+                    delay: 160,
+                    ease: 'Back.easeIn',
+                    onComplete: () => {
+                        this.targetBottle.destroy();
+                        this.spawnTargetBottle(true);
+                    }
+                });
+            }
+        });
+    }
+
+    handleFail() {
+        const reason = this.fillLevel < this.targetMin ? 'TOO LOW! TOSSED!' : 'OVERFLOW! TOSSED!';
+        this.statusText.setText(reason).setColor('#ff0055');
+        this.playSound('failSmash');
+
+        this.cameras.main.shake(120, 0.012);
+
+        this.tweens.add({
+            targets: this.targetBottle,
+            x: -90,
+            y: 80,
+            angle: -200,
+            alpha: 0.2,
+            duration: 400,
+            ease: 'Quad.easeIn',
+            onComplete: () => {
+                this.targetBottle.destroy();
+                this.spawnTargetBottle(true);
+            }
+        });
+    }
+
+    toggleMute() {
+        this.isMuted = !this.isMuted;
+        localStorage.setItem('grimy_pour_muted', this.isMuted);
+        this.muteBtn.setTexture(this.isMuted ? 'muteOn' : 'muteOff').setDisplaySize(24, 24);
+        if (this.isMuted) this.stopSound('pourLoop');
+    }
+
+    playSound(key, loop = false) {
+        if (this.isMuted) return;
+        const audio = LOADED_HTML_AUDIO[key];
+        if (audio) {
+            audio.loop = loop;
+            audio.currentTime = 0;
+            audio.play().catch(() => {});
+        } else {
+            this.playSynthFallback(key);
+        }
+    }
+
+    stopSound(key) {
+        const audio = LOADED_HTML_AUDIO[key];
+        if (audio) {
+            audio.pause();
+            audio.currentTime = 0;
+        }
+    }
+
+    playSynthFallback(key) {
+        try {
+            const ctx = this.sound.context;
+            if (!ctx) return;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            const now = ctx.currentTime;
+            if (key === 'winDing') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(520, now);
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.18);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+                osc.start(now);
+                osc.stop(now + 0.2);
+            } else if (key === 'failSmash') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(160, now);
+                osc.frequency.linearRampToValueAtTime(55, now + 0.25);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            } else if (key === 'clothDrop' || key === 'bottleSlide') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(240, now);
+                osc.frequency.exponentialRampToValueAtTime(120, now + 0.1);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now);
+                osc.stop(now + 0.1);
+            }
+        } catch (e) {}
+    }
+
+    // ========================================================================
+    // PLACEHOLDER GRAPHICS
+    // ========================================================================
+    createFallbackTextures() {
+        const g = this.make.graphics({ x: 0, y: 0, add: false });
+
+        if (!this.textures.exists('background')) {
+            g.clear();
+            g.fillStyle(0x0c0c0c, 1);
+            g.fillRect(0, 0, 300, 250);
+            g.fillStyle(0x161616, 1);
+            g.fillRect(0, 195, 300, 55);
+            g.lineStyle(2, 0x262626, 1);
+            g.lineBetween(0, 195, 300, 195);
+            g.generateTexture('background', 300, 250);
+        }
+
+        if (!this.textures.exists('topBarBg')) {
+            g.clear();
+            g.fillStyle(0x050505, 0.92);
+            g.fillRect(0, 0, 300, 36);
+            g.lineStyle(1, 0x2a2a2a, 1);
+            g.lineBetween(0, 35, 300, 35);
+            g.generateTexture('topBarBg', 300, 36);
+        }
+
+        if (!this.textures.exists('creditsBg')) {
+            g.clear();
+            g.fillStyle(0x111111, 1);
+            g.lineStyle(2, 0x333333, 1);
+            g.fillRoundedRect(0, 0, 260, 200, 8);
+            g.strokeRoundedRect(0, 0, 260, 200, 8);
+            g.generateTexture('creditsBg', 260, 200);
+        }
+
+        if (!this.textures.exists('closeBtn')) {
+            g.clear();
+            g.fillStyle(0xff0055, 1);
+            g.fillCircle(12, 12, 12);
+            g.lineStyle(2, 0xffffff, 1);
+            g.lineBetween(8, 8, 16, 16);
+            g.lineBetween(16, 8, 8, 16);
+            g.generateTexture('closeBtn', 24, 24);
+        }
+
+        if (!this.textures.exists('playerIcon')) {
+            g.clear();
+            g.fillStyle(0xffffff, 1);
+            g.fillCircle(8, 8, 7);
+            g.fillStyle(0x181818, 1);
+            g.fillCircle(5.5, 6.5, 1.2); 
+            g.fillCircle(10.5, 6.5, 1.2); 
+            g.lineStyle(1.5, 0x181818, 1);
+            g.beginPath();
+            g.arc(8, 8.5, 3.5, 0.2, Math.PI - 0.2, false); 
+            g.strokePath();
+            g.generateTexture('playerIcon', 16, 16);
+        }
+
+        if (!this.textures.exists('worldIcon')) {
+            g.clear();
+            g.lineStyle(1.5, 0xffffff, 1);
+            g.strokeCircle(8, 8, 6.5);
+            g.lineBetween(1.5, 8, 14.5, 8); 
+            g.lineBetween(8, 1.5, 8, 14.5); 
+            g.strokeEllipse(8, 8, 6.5, 12); 
+            g.generateTexture('worldIcon', 16, 16);
+        }
+
+        if (!this.textures.exists('logo')) {
+            g.clear();
+            g.fillStyle(0xff0055, 1);
+            g.fillRoundedRect(0, 0, 68, 24, 4);
+            g.generateTexture('logo', 68, 24);
+        }
+        
+        if (!this.textures.exists('creditsLogo')) {
+            g.clear();
+            g.fillStyle(0xff0055, 1);
+            g.fillRoundedRect(0, 0, 140, 50, 8);
+            g.generateTexture('creditsLogo', 140, 50);
+        }
+
+        if (!this.textures.exists('creditsBtn')) {
+            g.clear();
+            g.fillStyle(0x333333, 1);
+            g.fillRoundedRect(0, 0, 48, 16, 4);
+            g.lineStyle(1, 0x00ffcc, 1);
+            g.strokeRoundedRect(0, 0, 48, 16, 4);
+            g.generateTexture('creditsBtn', 48, 16);
+        }
+
+        if (!this.textures.exists('pourBottle')) {
+            g.clear();
+            g.fillStyle(0x2d4c1e, 0.95);
+            g.lineStyle(2, 0x5c8a47, 1);
+            g.fillRoundedRect(2, 18, 36, 52, 6);
+            g.strokeRoundedRect(2, 18, 36, 52, 6);
+            g.fillRect(12, 2, 16, 16);
+            g.strokeRect(12, 2, 16, 16);
+            g.fillStyle(0xd9c8a9, 1);
+            g.fillRect(5, 34, 30, 18);
+            g.generateTexture('pourBottle', 40, 72);
+        }
+
+        if (!this.textures.exists('targetBottle')) {
+            g.clear();
+            g.fillStyle(0xffffff, 0.14);
+            g.lineStyle(2.5, 0xcccccc, 0.9);
+            g.fillRoundedRect(4, 28, 48, 62, 8);
+            g.strokeRoundedRect(4, 28, 48, 62, 8);
+            g.fillRect(19, 4, 18, 24);
+            g.strokeRect(19, 4, 18, 24);
+            g.lineStyle(3, 0xeeeeee, 1);
+            g.strokeRect(17, 1, 22, 4);
+            g.generateTexture('targetBottle', 56, 94);
+        }
+
+        if (!this.textures.exists('cloth')) {
+            g.clear();
+            g.fillStyle(0xdddddd, 1);
+            g.lineStyle(1, 0x999999, 1);
+            g.fillRoundedRect(4, 6, 12, 76, 3);
+            g.strokeRoundedRect(4, 6, 12, 76, 3);
+            g.fillStyle(0xff0055, 1);
+            g.fillTriangle(4, 8, 16, 8, 22, 18);
+            g.generateTexture('cloth', 24, 84);
+        }
+
+        if (!this.textures.exists('targetLine')) {
+            g.clear();
+            g.fillStyle(0x000000, 1);
+            g.fillRect(0, 0, 52, 3);
+            g.generateTexture('targetLine', 52, 3);
+        }
+
+        if (!this.textures.exists('muteOff')) {
+            g.clear();
+            g.fillStyle(0x222222, 1);
+            g.lineStyle(1.5, 0x00ffcc, 1);
+            g.fillRoundedRect(0, 0, 24, 24, 4);
+            g.strokeRoundedRect(0, 0, 24, 24, 4);
+            g.fillStyle(0x00ffcc, 1);
+            g.fillTriangle(6, 12, 13, 6, 13, 18);
+            g.lineBetween(16, 8, 18, 16);
+            g.generateTexture('muteOff', 24, 24);
+        }
+
+        if (!this.textures.exists('muteOn')) {
+            g.clear();
+            g.fillStyle(0x222222, 1);
+            g.lineStyle(1.5, 0xff0055, 1);
+            g.fillRoundedRect(0, 0, 24, 24, 4);
+            g.strokeRoundedRect(0, 0, 24, 24, 4);
+            g.fillStyle(0x777777, 1);
+            g.fillTriangle(6, 12, 13, 6, 13, 18);
+            g.lineStyle(2, 0xff0055, 1);
+            g.lineBetween(15, 8, 20, 16);
+            g.lineBetween(20, 8, 15, 16);
+            g.generateTexture('muteOn', 24, 24);
+        }
+
+        g.destroy();
+    }
+
+    async fetchWorldScore() {
+        try {
+            const res = await fetch(`https://api.counterapi.dev/v1/${GLOBAL_API_NAMESPACE}/${GLOBAL_API_KEY}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (typeof data.count === 'number') {
+                    this.worldScore = data.count;
+                    this.worldScoreText.setText(`${this.worldScore}`);
+                }
+            }
+        } catch (e) {
+            const savedWorld = parseInt(localStorage.getItem('grimy_world_fallback')) || 1337;
+            this.worldScore = savedWorld;
+            this.worldScoreText.setText(`${this.worldScore}`);
+        }
+    }
+
+    async incrementWorldScore() {
+        this.worldScore++;
+        localStorage.setItem('grimy_world_fallback', this.worldScore);
+        this.worldScoreText.setText(`${this.worldScore}`);
+
+        try {
+            const res = await fetch(`https://api.counterapi.dev/v1/${GLOBAL_API_NAMESPACE}/${GLOBAL_API_KEY}/up`);
+            if (res.ok) {
+                const data = await res.json();
+                if (typeof data.count === 'number') {
+                    this.worldScore = data.count;
+                    this.worldScoreText.setText(`${this.worldScore}`);
+                }
+            }
+        } catch (e) {}
+    }
+}
+
+// ============================================================================
+// 4. BOOTSTRAP GAME
+// ============================================================================
+preloadLocalAssets(() => {
+    const config = {
+        type: Phaser.CANVAS,
+        width: 300,
+        height: 250,
+        parent: 'game-container',
+        backgroundColor: '#080808',
+        scene: [PourGame]
+    };
+    new Phaser.Game(config);
+});
+</script>
+
+</body>
+</html>
