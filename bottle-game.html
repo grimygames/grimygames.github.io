@@ -752,9 +752,11 @@ class PourGame extends Phaser.Scene {
         g.destroy();
     }
 
+    // --- Added cache busters (?t=...) to both fetch requests below ---
+
     async fetchWorldScore() {
         try {
-            const res = await fetch(`https://api.counterapi.dev/v1/${GLOBAL_API_NAMESPACE}/${GLOBAL_API_KEY}`);
+            const res = await fetch(`https://api.counterapi.dev/v1/${GLOBAL_API_NAMESPACE}/${GLOBAL_API_KEY}?t=${new Date().getTime()}`);
             if (res.ok) {
                 const data = await res.json();
                 if (typeof data.count === 'number') {
@@ -775,7 +777,7 @@ class PourGame extends Phaser.Scene {
         this.worldScoreText.setText(`${this.worldScore}`);
 
         try {
-            const res = await fetch(`https://api.counterapi.dev/v1/${GLOBAL_API_NAMESPACE}/${GLOBAL_API_KEY}/up`);
+            const res = await fetch(`https://api.counterapi.dev/v1/${GLOBAL_API_NAMESPACE}/${GLOBAL_API_KEY}/up?t=${new Date().getTime()}`);
             if (res.ok) {
                 const data = await res.json();
                 if (typeof data.count === 'number') {
