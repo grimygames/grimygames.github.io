@@ -105,9 +105,13 @@ const ASSETS_CONFIG = {
     }
 };
 
-// Fixed Namespaces (No underscores allowed by some free APIs)
+// CRITICAL: CounterAPI strictly forbids underscores. Use letters/numbers only.
 const GLOBAL_API_NAMESPACE = 'grimygames';
 const GLOBAL_API_KEY = 'molotovs';
+
+// OFFSET: This number is added visually to the true internet database count 
+// so you don't lose your previous tally of molotovs ever made.
+const WORLD_SCORE_OFFSET = 1337; 
 
 // ============================================================================
 // 2. LOCAL DRIVE (file://) PRELOADER
@@ -174,7 +178,7 @@ class PourGame extends Phaser.Scene {
     constructor() {
         super('PourGame');
         this.playerScore = parseInt(localStorage.getItem('grimy_pour_score')) || 0;
-        this.worldScore = 0; // Strictly pulled from server, no local fallback
+        this.worldScore = 0; // True DB count starts at 0
         this.isMuted = localStorage.getItem('grimy_pour_muted') === 'true';
         this.isPouring = false;
         this.canInteract = false;
@@ -241,7 +245,7 @@ class PourGame extends Phaser.Scene {
         this.add.image(150, 233, 'logo').setDisplaySize(68, 24).setDepth(20);
 
         this.add.image(205, 233, 'worldIcon').setDisplaySize(16, 16).setDepth(21);
-        this.worldScoreText = this.add.text(218, 233, `...`, { // Starts with dots until loaded
+        this.worldScoreText = this.add.text(218, 233, `...`, {
             fontFamily: '"Raleway", sans-serif',
             fontSize: '14px',
             color: '#ffffff',
@@ -477,7 +481,6 @@ class PourGame extends Phaser.Scene {
         localStorage.setItem('grimy_pour_score', this.playerScore);
         this.playerScoreText.setText(`${this.playerScore}`);
         
-        // Triggers the internet database increment
         this.incrementWorldScore();
 
         const m = ASSETS_CONFIG.bottleMetrics;
@@ -756,45 +759,43 @@ class PourGame extends Phaser.Scene {
     }
 
     // ========================================================================
-    // WORLD SCORE API LOGIC
+    // WORLD SCORE API LOGIC (CORS & BROWSER CACHE SAFE)
     // ========================================================================
     async fetchWorldScore() {
         try {
-            const url = `https://api.counterapi.dev/v1/${GLOBAL_API_NAMESPACE}/${GLOBAL_API_KEY}?t=${Date.now()}`;
-            const res = await fetch(url, { mode: 'cors' });
+            const url = `https://api.counterapi.dev/v1/${GLOBAL_API_NAMESPACE}/${GLOBAL_API_KEY}`;
+            const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache' }, cache: 'no-store' });
             
             if (res.ok) {
                 const data = await res.json();
                 const serverCount = data.count !== undefined ? data.count : data.value;
                 if (typeof serverCount === 'number') {
                     this.worldScore = Math.max(this.worldScore, serverCount);
-                    this.worldScoreText.setText(`${this.worldScore}`);
+                    this.worldScoreText.setText(`${this.worldScore + WORLD_SCORE_OFFSET}`);
                 }
             } else if (res.status === 404 && this.worldScore === 0) {
-                // If it's a 404, it means no one has scored on this new namespace yet!
-                this.worldScoreText.setText(`0`);
+                this.worldScoreText.setText(`${WORLD_SCORE_OFFSET}`);
             }
         } catch (e) {
             console.warn("Global server check blocked or offline.");
-            if (this.worldScore === 0) this.worldScoreText.setText(`0`);
+            if (this.worldScore === 0) this.worldScoreText.setText(`${WORLD_SCORE_OFFSET}`);
         }
     }
 
     async incrementWorldScore() {
-        // Optimistically update the UI locally first so it feels instant
         this.worldScore++;
-        this.worldScoreText.setText(`${this.worldScore}`);
+        this.worldScoreText.setText(`${this.worldScore + WORLD_SCORE_OFFSET}`);
 
         try {
-            const url = `https://api.counterapi.dev/v1/${GLOBAL_API_NAMESPACE}/${GLOBAL_API_KEY}/up?t=${Date.now()}`;
-            const res = await fetch(url, { mode: 'cors' });
+            const url = `https://api.counterapi.dev/v1/${GLOBAL_API_NAMESPACE}/${GLOBAL_API_KEY}/up`;
+            const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache' }, cache: 'no-store' });
             
             if (res.ok) {
                 const data = await res.json();
                 const serverCount = data.count !== undefined ? data.count : data.value;
                 if (typeof serverCount === 'number') {
                     this.worldScore = Math.max(this.worldScore, serverCount);
-                    this.worldScoreText.setText(`${this.worldScore}`);
+                    this.worldScoreText.setText(`${this.worldScore + WORLD_SCORE_OFFSET}`);
                 }
             }
         } catch (e) {
