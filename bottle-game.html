@@ -105,8 +105,9 @@ const ASSETS_CONFIG = {
     }
 };
 
-const GLOBAL_API_NAMESPACE = 'grimygames_com';
-const GLOBAL_API_KEY = 'molotov_bottles_filled';
+// Fixed Namespaces (No underscores allowed by some free APIs)
+const GLOBAL_API_NAMESPACE = 'grimygames';
+const GLOBAL_API_KEY = 'molotovs';
 
 // ============================================================================
 // 2. LOCAL DRIVE (file://) PRELOADER
@@ -173,7 +174,7 @@ class PourGame extends Phaser.Scene {
     constructor() {
         super('PourGame');
         this.playerScore = parseInt(localStorage.getItem('grimy_pour_score')) || 0;
-        this.worldScore = 0; // Starts at 0 so it pulls the true number from the internet
+        this.worldScore = 0; // Strictly pulled from server, no local fallback
         this.isMuted = localStorage.getItem('grimy_pour_muted') === 'true';
         this.isPouring = false;
         this.canInteract = false;
@@ -265,7 +266,7 @@ class PourGame extends Phaser.Scene {
         // 7. Credits Modal UI System
         this.buildCreditsModal();
 
-        // 8. Server Polling (Checks World Score every 10 seconds)
+        // 8. Server Polling (Checks World Score every 10 seconds securely)
         this.time.addEvent({
             delay: 10000,
             callback: this.fetchWorldScore,
@@ -475,6 +476,8 @@ class PourGame extends Phaser.Scene {
         this.playerScore++;
         localStorage.setItem('grimy_pour_score', this.playerScore);
         this.playerScoreText.setText(`${this.playerScore}`);
+        
+        // Triggers the internet database increment
         this.incrementWorldScore();
 
         const m = ASSETS_CONFIG.bottleMetrics;
@@ -752,40 +755,51 @@ class PourGame extends Phaser.Scene {
         g.destroy();
     }
 
-    // --- Added cache busters (?t=...) to both fetch requests below ---
-
+    // ========================================================================
+    // WORLD SCORE API LOGIC
+    // ========================================================================
     async fetchWorldScore() {
         try {
-            const res = await fetch(`https://api.counterapi.dev/v1/${GLOBAL_API_NAMESPACE}/${GLOBAL_API_KEY}?t=${new Date().getTime()}`);
+            const url = `https://api.counterapi.dev/v1/${GLOBAL_API_NAMESPACE}/${GLOBAL_API_KEY}?t=${Date.now()}`;
+            const res = await fetch(url, { mode: 'cors' });
+            
             if (res.ok) {
                 const data = await res.json();
-                if (typeof data.count === 'number') {
-                    this.worldScore = Math.max(this.worldScore, data.count);
+                const serverCount = data.count !== undefined ? data.count : data.value;
+                if (typeof serverCount === 'number') {
+                    this.worldScore = Math.max(this.worldScore, serverCount);
                     this.worldScoreText.setText(`${this.worldScore}`);
                 }
+            } else if (res.status === 404 && this.worldScore === 0) {
+                // If it's a 404, it means no one has scored on this new namespace yet!
+                this.worldScoreText.setText(`0`);
             }
         } catch (e) {
-            const savedWorld = parseInt(localStorage.getItem('grimy_world_fallback')) || 0;
-            this.worldScore = Math.max(this.worldScore, savedWorld);
-            this.worldScoreText.setText(`${this.worldScore}`);
+            console.warn("Global server check blocked or offline.");
+            if (this.worldScore === 0) this.worldScoreText.setText(`0`);
         }
     }
 
     async incrementWorldScore() {
+        // Optimistically update the UI locally first so it feels instant
         this.worldScore++;
-        localStorage.setItem('grimy_world_fallback', this.worldScore);
         this.worldScoreText.setText(`${this.worldScore}`);
 
         try {
-            const res = await fetch(`https://api.counterapi.dev/v1/${GLOBAL_API_NAMESPACE}/${GLOBAL_API_KEY}/up?t=${new Date().getTime()}`);
+            const url = `https://api.counterapi.dev/v1/${GLOBAL_API_NAMESPACE}/${GLOBAL_API_KEY}/up?t=${Date.now()}`;
+            const res = await fetch(url, { mode: 'cors' });
+            
             if (res.ok) {
                 const data = await res.json();
-                if (typeof data.count === 'number') {
-                    this.worldScore = Math.max(this.worldScore, data.count);
+                const serverCount = data.count !== undefined ? data.count : data.value;
+                if (typeof serverCount === 'number') {
+                    this.worldScore = Math.max(this.worldScore, serverCount);
                     this.worldScoreText.setText(`${this.worldScore}`);
                 }
             }
-        } catch (e) {}
+        } catch (e) {
+            console.warn("Global server increment blocked or offline.");
+        }
     }
 }
 
