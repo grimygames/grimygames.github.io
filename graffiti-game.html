@@ -1,0 +1,2870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Grimy Tag</title>
+    <!-- Google Font: Raleway (Regular, Bold, Black) -->
+    <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            font-family: 'Raleway', sans-serif;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            background-color: transparent;
+            font-family: 'Raleway', sans-serif;
+        }
+        #game-container {
+            width: 300px;
+            height: 250px;
+            position: relative;
+            border: 2px solid #222;
+            box-sizing: content-box;
+            transition: border-color 0.3s ease;
+        }
+        #game-container:hover {
+            border-color: #000000;
+        }
+        .font-preload {
+            font-family: 'Raleway', sans-serif;
+            font-weight: 900;
+            position: absolute;
+            left: -9999px;
+            visibility: hidden;
+        }
+    </style>
+</head>
+<body>
+
+<div class="font-preload">.</div>
+<div id="game-container" oncontextmenu="return false;"></div>
+<!-- Hidden File Inputs for Custom Target PNG & Custom Station Background Uploads -->
+<input type="file" id="png-upload-input" accept="image/png" style="display: none;" />
+<input type="file" id="bg-upload-input" accept="image/png,image/jpeg,image/webp" style="display: none;" />
+
+<script>
+// ============================================================================
+// 1. EASY ASSET, TEXT, IMAGE, AUDIO & GAMEPLAY CONFIGURATION
+// ============================================================================
+const ASSETS_CONFIG = {
+    // FONT FAMILY USED ACROSS ALL FEED TEXT, MENUS & BUTTONS
+    fontFamily: 'Raleway, sans-serif',
+
+    credits: [
+        "A game by GrimyGames.com",
+        "Code & Logic: Google Gemini",
+        "Sound FX: FreeSound.org",
+        "Art & Assets: Dirty Danny"
+    ],
+
+    // CUSTOMIZE ALL STATUS BAR FEED TEXT, MENU TEXT, ERRORS & FALLBACK LABELS HERE
+    text: {
+        // Top Status Feed Messages
+        layer1Status:          "LAYER 2: BACKGROUND",
+        layer2Status:          "LAYER 1: TARGET IMAGE",
+        dripOnStatus:          "DRIP MODE: ON (JUICY!)",
+        dripOffStatus:         "DRIP MODE: OFF",
+        splatOnStatus:         "SPLATTER NOZZLE: ON",
+        splatOffStatus:        "SPLATTER NOZZLE: OFF",
+        rainbowOnStatus:       "RAINBOW CAN: ON",
+        rainbowOffStatus:      "RAINBOW CAN: OFF",
+        transBgOnStatus:       "BACKGROUND HIDDEN",
+        transBgOffStatus:      "BACKGROUND VISIBLE",
+        targetPngOnStatus:     "TARGET IMAGE: ON",
+        targetPngOffStatus:    "TARGET IMAGE: OFF",
+        pngHiddenLayerNotice:  "ENABLE IMAGE IN MENU FIRST",
+        bgHiddenLayerNotice:   "ENABLE BACKGROUND",
+        stickerRotatePrefix:   "STICKER ANGLE: ",
+        stickerTrayPrompt:     "PICK A STICKER",
+        stickerSlapPrefix:     "SLAP: ",
+        undoSuccessStatus:     "OOPS! UNDID LAST ACTION",
+        undoEmptyStatus:       "NOTHING TO UNDO!",
+        clearWallStatus:       "WALL BUFFED CLEAN!",
+        snapshotSavedStatus:   "TAG SAVED!",
+
+        // Upload PNG & Background Messages & Errors
+        uploadSuccessStatus:     "CUSTOM TARGET PNG LOADED!",
+        uploadBgSuccessStatus:   "CUSTOM BACKGROUND LOADED!",
+        uploadFormatError:       "ERROR: PNG FILES ONLY!",
+        uploadBgFormatError:     "ERROR: PNG / JPG / WEBP ONLY!",
+        uploadFileSizeError:     "ERROR: FILE OVER 2MB LIMIT!",
+        uploadDimensionError:    "ERROR: IMAGE OVER 1500x1500 PX!",
+
+        // Hamburger Menu Window Text (menuTitle is used as fallback if menuTitleImg PNG is missing)
+        menuTitle:             "OPTIONS & TOOLS",
+        menuMuteRowLabel:      "SOUND FX:",
+        menuTransRowLabel:     "TRANSPARENT BG:",
+        menuTargetPngRowLabel: "SHOW TARGET PNG:",
+        menuUploadRowLabel:    "CUSTOM TARGET:",
+        menuUploadBgRowLabel:  "CUSTOM BG:",
+        menuHintDefault:       "MAX UPLOAD: 2MB / 1500x1500 PX",
+
+        // Fallback Button Labels (used if custom PNG is not found)
+        menuBtnLabel:          "☰",
+        layersLabel:           "LAY",
+        dripLabel:             "DRP",
+        splatLabel:            "SPL",
+        rainbowLabel:          "RNB",
+        stickerLabel:          "★",
+        undoLabel:             "↺",
+        zoomInLabel:           "+",
+        zoomOutLabel:          "−",
+        eraserLabel:           "ERASE",
+        clearLabel:            "CLEAR",
+        toggleOnLabel:         "ON",
+        toggleOffLabel:        "OFF",
+        uploadBtnLabel:        "UPLOAD PNG",
+        uploadBgBtnLabel:      "UPLOAD BG"
+    },
+
+    // GAMEPLAY, MASK & UPLOAD LIMITS CONFIGURATION
+    gameplay: {
+        defaultLayer: 2,                // 2 = Start on Target PNG (masked), 1 = Start on Background Image
+        maskTopLayer: true,             // true = Layer 2 (Target PNG) only draws on opaque PNG pixels
+        maskAlphaThreshold: 10,         // Any pixel with alpha >= 10 (0-255) is 100% paintable
+        defaultTransparentBg: false,    // false = Show station background image at start
+        defaultShowTargetPng: true,     // true = Show the target PNG at start
+        hideWallWhenTransparent: true,  // true = Hide the station background & BG paint when Transparent BG is ON
+
+        // Custom Upload Limits (Applies to both Target PNG and Background Uploads)
+        maxUploadFileSizeKB: 2048,      // Max file size in KB (2048 KB = 2 MB)
+        maxUploadWidth: 1500,           // Max image width in pixels
+        maxUploadHeight: 1500,          // Max image height in pixels
+
+        // Brush FX Settings
+        dripSpawnChance: 0.18,          // Chance per stroke step to spawn a running paint drip
+        dripSpeed: 28,                  // Pixels per second that drips run down
+        dripMinLength: 12,              // Minimum drip travel distance in pixels
+        dripMaxLength: 42,              // Maximum drip travel distance in pixels
+        splatBurstCount: 9,             // Number of droplets per splatter burst
+        stickerRotateStep: 15           // Degrees to rotate active sticker when clicking Rainbow/Rotate button
+    },
+
+    // 5 STATIONS: Each station has its own Target PNG (220x155) AND its own Default Background (300x250)!
+    // If a station's bgPath is missing, it falls back to images.defaultBackground, then procedural brick wall.
+    stations: [
+        {
+            key: 'target1',
+            path: 'img/graffiti/target-1.png',
+            bgKey: 'bg1',
+            bgPath: 'img/graffiti/bg-1.png',
+            width: 220,
+            height: 155,
+            bgWidth: 300,
+            bgHeight: 250,
+            name: "SPOT 1: CAR"
+        },
+        {
+            key: 'target2',
+            path: 'img/graffiti/target-2.png',
+            bgKey: 'bg2',
+            bgPath: 'img/graffiti/bg-2.png',
+            width: 220,
+            height: 155,
+            bgWidth: 300,
+            bgHeight: 250,
+            name: "SPOT 2: COP CAR"
+        },
+        {
+            key: 'target3',
+            path: 'img/graffiti/target-3.png',
+            bgKey: 'bg3',
+            bgPath: 'img/graffiti/bg-3.png',
+            width: 220,
+            height: 155,
+            bgWidth: 300,
+            bgHeight: 250,
+            name: "SPOT 3: DUMPSTER"
+        },
+        {
+            key: 'target4',
+            path: 'img/graffiti/target-4.png',
+            bgKey: 'bg4',
+            bgPath: 'img/graffiti/bg-4.png',
+            width: 220,
+            height: 155,
+            bgWidth: 300,
+            bgHeight: 250,
+            name: "SPOT 4: STOP SIGN"
+        },
+        {
+            key: 'target5',
+            path: 'img/graffiti/target-5.png',
+            bgKey: 'bg5',
+            bgPath: 'img/graffiti/bg-5.png',
+            width: 220,
+            height: 155,
+            bgWidth: 300,
+            bgHeight: 250,
+            name: "SPOT 5: PAPER"
+        }
+    ],
+
+    stickers: [
+        { key: 'sticker1', path: 'img/graffiti/sticker-1.png', width: 56, height: 56, name: "GRIMY LOGO" },
+        { key: 'sticker2', path: 'img/graffiti/sticker-2.png', width: 64, height: 48, name: "HELLO MY NAME IS" },
+        { key: 'sticker3', path: 'img/graffiti/sticker-3.png', width: 56, height: 56, name: "SKULL" },
+        { key: 'sticker4', path: 'img/graffiti/sticker-4.png', width: 60, height: 60, name: "DICK SLAP" },
+        { key: 'sticker5', path: 'img/graffiti/sticker-5.png', width: 68, height: 46, name: "POW!" },
+        { key: 'sticker6', path: 'img/graffiti/sticker-6.png', width: 56, height: 56, name: "SLIME DRIP" }
+    ],
+
+    images: {
+        // DEFAULT FALLBACK BACKGROUND IMAGE (300x250) USED IF A STATION'S bg-X.png IS NOT FOUND
+        defaultBackground: 'img/graffiti/bg-default.png',
+
+        // 9 SPRAY PAINT COLOR BUTTON IMAGES
+        colorBlack:    'img/graffiti/color-black.png',
+        colorWhite:    'img/graffiti/color-white.png',
+        colorRed:      'img/graffiti/color-red.png',
+        colorYellow:   'img/graffiti/color-yellow.png',
+        colorGreen:    'img/graffiti/color-green.png',
+        colorBlue:     'img/graffiti/color-blue.png',
+        colorPink:     'img/graffiti/color-pink.png',
+        colorOrange:   'img/graffiti/color-orange.png',
+        colorPurple:   'img/graffiti/color-purple.png',
+
+        // 4 BRUSH SIZES (XS, S, M, L) & 3 ICON BRUSH STYLES (22x16)
+        sizeXS:        'img/graffiti/size-xs.png',          // 22x16 Extra Small Brush Icon
+        sizeS:         'img/graffiti/size-s.png',           // 22x16 Small Brush Icon
+        sizeM:         'img/graffiti/size-m.png',           // 22x16 Medium Brush Icon
+        sizeL:         'img/graffiti/size-l.png',           // 22x16 Large Brush Icon
+        styleSoft:     'img/graffiti/style-soft.png',       // 22x16 Soft Brush Icon
+        styleHard:     'img/graffiti/style-hard.png',       // 22x16 Hard Brush Icon
+        styleSpray:    'img/graffiti/style-spray.png',      // 22x16 Spray Nozzle Icon
+
+        // LEFT & RIGHT SIDE COLUMN BUTTON IMAGES (18x18)
+        splatBtn:      'img/graffiti/splat-btn.png',        // Left Top (Above Sticker)
+        stickerBtn:    'img/graffiti/sticker-btn.png',      // Left Upper-Mid (Above Left Arrow)
+        zoomOutBtn:    'img/graffiti/zoom-out-btn.png',     // Left Lower-Mid (Below Left Arrow)
+        rainbowBtn:    'img/graffiti/rainbow-btn.png',      // Left Bottom (Below Zoom Out)
+
+        layersBtn:     'img/graffiti/layers-btn.png',       // Right Top (Above Undo)
+        undoBtn:       'img/graffiti/undo-btn.png',         // Right Upper-Mid (Above Right Arrow)
+        zoomInBtn:     'img/graffiti/zoom-in-btn.png',      // Right Lower-Mid (Below Right Arrow)
+        dripBtn:       'img/graffiti/drip-btn.png',         // Right Bottom (Below Zoom In)
+
+        // HAMBURGER MENU MODAL & BUTTON IMAGES
+        menuBtn:       'img/graffiti/menu-btn.png',         // 20x20 Top-Right Hamburger Icon
+        menuBg:        'img/graffiti/menu-bg.png',          // 260x218 Menu Modal Background
+        menuTitleImg:  'img/graffiti/menu-title.png',       // 160x22 "OPTIONS & TOOLS" Header Image
+        transBgOn:     'img/graffiti/trans-on.png',         // 48x18 Transparent BG ON Button
+        transBgOff:    'img/graffiti/trans-off.png',        // 48x18 Transparent BG OFF Button
+        targetPngOn:   'img/graffiti/target-on.png',        // 48x18 Show Target PNG ON Button
+        targetPngOff:  'img/graffiti/target-off.png',       // 48x18 Show Target PNG OFF Button
+        uploadBtn:     'img/graffiti/upload-btn.png',       // 96x20 Upload Target PNG Button
+        uploadBgBtn:   'img/graffiti/upload-bg-btn.png',    // 96x20 Upload Station Background Button
+
+        // TOOLS, UTILITIES & MODAL IMAGES
+        eraserBtn:     'img/graffiti/eraser-btn.png',
+        clearBtn:      'img/graffiti/clear-btn.png',
+        stickerTrayBg: 'img/graffiti/sticker-tray-bg.png',  // 264x68 Tray BG
+
+        // UI HUD Assets
+        topBarBg:      'img/game/top-bar-bg.png',           // 300x32 top bar
+        bottomBarBg:   'img/graffiti/bottom-bar.png',       // 300x54 bottom palette bar
+        logo:          'img/graffiti/logo.png',             // Top-left logo (50x16)
+        creditsBg:     'img/game/credits-bg.png',           // 260x200 modal bg
+        creditsLogo:   'img/game/credits-logo.png',         // 140x50 modal logo
+        creditsBtn:    'img/graffiti/credits-btn.png',      // Bottom-left credits button (44x16)
+        closeBtn:      'img/game/close-btn.png',            // 24x24 close X
+        muteOn:        'img/game/mute-on.png',              // 20x20 mute icon (in Menu)
+        muteOff:       'img/game/mute-off.png',             // 20x20 unmute icon (in Menu)
+        arrowLeft:     'img/graffiti/arrow-left.png',       // 20x38 left pan button
+        arrowRight:    'img/graffiti/arrow-right.png',      // 20x38 right pan button
+        camIcon:       'img/graffiti/cam-icon.png'          // 20x20 snapshot camera icon
+    },
+
+    uiMetrics: {
+        // ====================================================================
+        // EASILY CHANGE SELECTED ICON BORDER & STAMP TRAY BORDER COLORS HERE!
+        // ====================================================================
+        selectedBorderColor:    0xffffff, // Thin white border for all selected icons (use 0xRRGGBB hex)
+        selectedBorderWidth:    1,        // 1px thin border line width
+        stickerSlotBorderColor: 0x000000, // Black border around unselected stamp slots in tray
+        stickerSlotBorderWidth: 1,        // 1px border width for unselected stamp slots
+
+        minZoom: 1.0,
+        maxZoom: 3.0,
+        zoomStep: 0.5,
+
+        // Top Bar
+        topBarY: 16,
+        topIconSize: 20,
+        camBtnX: 258,
+        menuBtnX: 284,        // Hamburger button in place of old Mute button
+
+        // Hamburger Menu Window Layout (5 Rows: Sound, Transparent BG, Show PNG, Upload PNG, Upload BG)
+        menuModalWidth: 260,
+        menuModalHeight: 218,
+        menuCloseBtnX: 265,
+        menuCloseBtnY: 32,
+        menuTitleY: 36,
+        menuTitleWidth: 160,  // Width of the "OPTIONS & TOOLS" image header
+        menuTitleHeight: 22,  // Height of the "OPTIONS & TOOLS" image header
+        menuRow1Y: 64,        // Row 1: Sound FX (Mute/Unmute)
+        menuRow2Y: 91,        // Row 2: Transparent Background Toggle
+        menuRow3Y: 118,       // Row 3: Show/Hide Target PNG Toggle
+        menuRow4Y: 146,       // Row 4: Upload Custom Target PNG Button
+        menuRow5Y: 174,       // Row 5: Upload Custom Background Button (for current station)
+        menuLabelX: 38,       // Left-aligned row label X
+        menuActionX: 214,     // Right-aligned button X inside menu
+        menuHintY: 204,       // Status/Error message Y at bottom of menu
+        toggleBtnWidth: 48,
+        toggleBtnHeight: 18,
+        uploadBtnWidth: 96,
+        uploadBtnHeight: 20,
+
+        // Left & Right Side Columns (Symmetrical 5-Slot Vertical Layout)
+        leftColX: 12,
+        rightColX: 288,
+        sideBtnSize: 18,
+        arrowWidth: 20,
+        arrowHeight: 38,
+        slotTopY: 50,         // Left: Splatter | Right: Layers
+        slotUpperMidY: 74,    // Left: Sticker  | Right: Undo
+        arrowCenterY: 114,    // Left: Arrow    | Right: Arrow
+        slotLowerMidY: 154,   // Left: Zoom Out | Right: Zoom In
+        slotBottomY: 178,     // Left: Rainbow  | Right: Drip
+
+        // Sticker Tray
+        trayX: 150,
+        trayY: 156,
+        trayWidth: 264,
+        trayHeight: 68,
+        trayThumbSize: 44,
+        trayItemSpacing: 58,
+
+        // Bottom Bar Row 1
+        row1Y: 209,
+        colorBtnWidth: 18,
+        colorBtnHeight: 18,
+        colorStartX: 15,
+        colorSpacingX: 21,
+        eraserBtnX: 224,
+        eraserBtnWidth: 44,
+        eraserBtnHeight: 16,
+        clearBtnX: 272,
+        clearBtnWidth: 44,
+        clearBtnHeight: 16,
+
+        // Bottom Bar Row 2 (Credits + 4 Size Icons + 3 Style Icons)
+        row2Y: 235,
+        creditsBtnX: 34,
+        creditsBtnWidth: 44,
+        creditsBtnHeight: 16,
+        sizeStartX: 82,
+        sizeSpacingX: 26,
+        sizeBtnWidth: 22,
+        sizeBtnHeight: 16,
+        styleStartX: 212,
+        styleSpacingX: 28,
+        styleBtnWidth: 22,
+        styleBtnHeight: 16
+    },
+
+    audio: {
+        sprayLoop:          'audio/graffiti/spray-loop.wav',
+        canShake:           'audio/graffiti/can-shake.wav',
+        sizeClick:          'audio/graffiti/nozzle-click.wav',
+        styleClick:         'audio/graffiti/brush-style.wav',
+        eraserSelect:       'audio/graffiti/erase-mode.wav',
+        clearAllSfx:        'audio/graffiti/clear-wall.wav',
+        zoomInSfx:          'audio/graffiti/zoom-in.wav',
+        zoomOutSfx:         'audio/graffiti/zoom-out.wav',
+        undoSfx:            'audio/graffiti/undo-oops.wav',
+        layersSfx:          'audio/graffiti/layer-switch.wav',
+        dripToggleSfx:      'audio/graffiti/drip-toggle.wav',
+        splatToggleSfx:     'audio/graffiti/splat-toggle.wav',
+        rainbowToggleSfx:   'audio/graffiti/rainbow-toggle.wav',
+        menuOpenSfx:        'audio/graffiti/menu-open.wav',
+        menuCloseSfx:       'audio/graffiti/menu-close.wav',
+        transToggleSfx:     'audio/graffiti/trans-toggle.wav',
+        targetToggleSfx:    'audio/graffiti/target-toggle.wav',
+        uploadSuccessSfx:   'audio/graffiti/upload-ok.wav',
+        uploadBgSuccessSfx: 'audio/graffiti/upload-bg-ok.wav',
+        uploadErrorSfx:     'audio/graffiti/upload-error.wav',
+        trayToggleSfx:      'audio/graffiti/tray-slide.wav',
+        trayScrollSfx:      'audio/graffiti/tray-scroll.wav',
+        stickerPickSfx:     'audio/graffiti/sticker-pick.wav',
+        stickerSlapSfx:     'audio/graffiti/sticker-slap.wav',
+        slideWhoosh:        'audio/graffiti/wall-slide.wav',
+        shutterClick:       'audio/graffiti/camera-shutter.wav'
+    }
+};
+
+const SPRAY_COLORS = [
+    { key: 'colorBlack',  name: 'black',  hex: 0x111111, rgb: '17, 17, 17' },
+    { key: 'colorWhite',  name: 'white',  hex: 0xffffff, rgb: '255, 255, 255' },
+    { key: 'colorRed',    name: 'red',    hex: 0xff1133, rgb: '255, 17, 51' },
+    { key: 'colorYellow', name: 'yellow', hex: 0xffdd00, rgb: '255, 221, 0' },
+    { key: 'colorGreen',  name: 'green',  hex: 0x00dd44, rgb: '0, 221, 68' },
+    { key: 'colorBlue',   name: 'blue',   hex: 0x0077ff, rgb: '0, 119, 255' },
+    { key: 'colorPink',   name: 'pink',   hex: 0xff33aa, rgb: '255, 51, 170' },
+    { key: 'colorOrange', name: 'orange', hex: 0xff7700, rgb: '255, 119, 0' },
+    { key: 'colorPurple', name: 'purple', hex: 0x9922ff, rgb: '153, 34, 255' }
+];
+
+// 4 Brush Sizes: XS, S, M, L
+const BRUSH_SIZES = [
+    { key: 'sizeXS', label: 'XS', radius: 2 },
+    { key: 'sizeS',  label: 'S',  radius: 4 },
+    { key: 'sizeM',  label: 'M',  radius: 9 },
+    { key: 'sizeL',  label: 'L',  radius: 16 }
+];
+
+// 3 Icon Brush Styles: Soft, Hard, Spray
+const BRUSH_STYLES = [
+    { key: 'styleSoft',  id: 'soft',  label: 'SOFT' },
+    { key: 'styleHard',  id: 'hard',  label: 'HARD' },
+    { key: 'styleSpray', id: 'spray', label: 'SPRAY' }
+];
+
+// ============================================================================
+// 2. LOCAL DRIVE (file://) PRELOADER
+// ============================================================================
+const LOADED_HTML_IMAGES = {};
+const LOADED_HTML_AUDIO = {};
+
+function preloadLocalAssets(onReady) {
+    const allImageEntries = [
+        ...Object.entries(ASSETS_CONFIG.images),
+        ...ASSETS_CONFIG.stations.map(st => [st.key, st.path]),
+        ...ASSETS_CONFIG.stations.map(st => [st.bgKey, st.bgPath]),
+        ...ASSETS_CONFIG.stickers.map(sk => [sk.key, sk.path])
+    ];
+    let remaining = allImageEntries.length;
+
+    Object.entries(ASSETS_CONFIG.audio).forEach(([key, path]) => {
+        if (!path) return;
+        const cleanPath = path.replace(/\\/g, '/');
+        const audio = new Audio();
+        audio.src = cleanPath;
+        audio.preload = 'auto';
+        audio.addEventListener('canplaythrough', () => {
+            LOADED_HTML_AUDIO[key] = audio;
+        }, { once: true });
+        audio.addEventListener('error', () => {}, { once: true });
+    });
+
+    const startWhenFontReady = () => {
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(() => onReady()).catch(() => onReady());
+        } else {
+            onReady();
+        }
+    };
+
+    if (remaining === 0) {
+        startWhenFontReady();
+        return;
+    }
+
+    const checkDone = () => {
+        remaining--;
+        if (remaining <= 0) startWhenFontReady();
+    };
+
+    allImageEntries.forEach(([key, path]) => {
+        if (!path) {
+            checkDone();
+            return;
+        }
+        const cleanPath = path.replace(/\\/g, '/');
+        const img = new Image();
+        img.onload = () => {
+            LOADED_HTML_IMAGES[key] = img;
+            checkDone();
+        };
+        img.onerror = () => {
+            checkDone();
+        };
+        img.src = cleanPath;
+    });
+}
+
+// ============================================================================
+// 3. MAIN PHASER GAME SCENE
+// ============================================================================
+class GraffitiGame extends Phaser.Scene {
+    constructor() {
+        super('GraffitiGame');
+        this.currentStation = 0;
+        this.isPanning = false;
+        this.isDrawing = false;
+        this.isModalOpen = false;
+        this.isMenuOpen = false;
+        this.isTrayOpen = false;
+        this.isMuted = localStorage.getItem('grimy_tag_muted') === 'true';
+
+        this.selectedColorIndex = 6;
+        this.selectedSizeIndex = 2; // Starts on 'M' (index 2 of XS, S, M, L)
+        this.selectedStyleIndex = 2;
+        this.isEraser = false;
+        this.activeSticker = null;
+        this.stickerAngle = 0;
+
+        // Feature & Visibility Toggles
+        this.isTransparentBg = Boolean(ASSETS_CONFIG.gameplay.defaultTransparentBg);
+        this.isTargetPngVisible = ASSETS_CONFIG.gameplay.defaultShowTargetPng !== false;
+        // Layer 2 = Target PNG (Masked), Layer 1 = Station Background Image (Full 300x250)
+        this.currentLayer = this.isTargetPngVisible ? (ASSETS_CONFIG.gameplay.defaultLayer || 2) : 1;
+
+        this.isDripMode = false;
+        this.isSplatMode = false;
+        this.isRainbowMode = false;
+        this.rainbowStepCounter = 0;
+        this.activeDrips = [];
+
+        this.zoomLevel = 1.0;
+        this.panOffsetX = 0;
+        this.panOffsetY = 0;
+
+        this.lastDrawX = null;
+        this.lastDrawY = null;
+
+        this.trayScrollX = 0;
+        this.isDraggingTray = false;
+        this.trayDragStartX = 0;
+        this.trayDragMoved = false;
+    }
+
+    create() {
+        Object.entries(LOADED_HTML_IMAGES).forEach(([key, imgElement]) => {
+            if (!this.textures.exists(key)) {
+                this.textures.addImage(key, imgElement);
+            }
+        });
+
+        this.createFallbackTextures();
+        this.createBrushAndEraserTextures();
+
+        // 1. WORLD CONTAINER
+        this.worldContainer = this.add.container(0, 0).setDepth(1);
+
+        // Setup all 5 Stations: Each station gets its own Background Sprite + BG Paint Layer (L1) + Target PNG + Target Paint Layer (L2)
+        this.stations = [];
+        const showBgAtStart = !(this.isTransparentBg && ASSETS_CONFIG.gameplay.hideWallWhenTransparent);
+
+        ASSETS_CONFIG.stations.forEach((stCfg, index) => {
+            const bgW = stCfg.bgWidth || 300;
+            const bgH = stCfg.bgHeight || 250;
+            const bgLeftX = index * 300;
+            const bgCenterX = bgLeftX + 150;
+            const bgCenterY = 125;
+
+            const centerX = bgLeftX + 150;
+            const centerY = 114;
+
+            // 1A. Station Default Background Image (300x250 per station)
+            const bgSprite = this.add.image(bgCenterX, bgCenterY, stCfg.bgKey)
+                .setDisplaySize(bgW, bgH)
+                .setVisible(showBgAtStart);
+
+            // 1B. Layer 1: Background Paint RenderTexture (Full 300x250 area — draws directly on the background image!)
+            const rtBg = this.add.renderTexture(bgLeftX, 0, bgW, bgH)
+                .setOrigin(0, 0)
+                .setVisible(showBgAtStart);
+
+            // 1C. Base Station Target PNG (220x155 with transparency)
+            const baseSprite = this.add.image(centerX, centerY, stCfg.key)
+                .setDisplaySize(stCfg.width, stCfg.height)
+                .setVisible(this.isTargetPngVisible);
+
+            // 1D. Layer 2: Top Target Paint RenderTexture (220x155 — strictly masked to visible PNG pixels)
+            const rtOver = this.add.renderTexture(
+                centerX - stCfg.width / 2,
+                centerY - stCfg.height / 2,
+                stCfg.width,
+                stCfg.height
+            ).setOrigin(0, 0).setVisible(this.isTargetPngVisible);
+
+            // Undo buffer holds both the 300x250 Background Paint and 220x155 Target PNG Paint
+            const undoKey = `undo_buf_${index}`;
+            if (this.textures.exists(undoKey)) this.textures.remove(undoKey);
+            const undoTex = this.textures.createCanvas(undoKey, bgW, bgH + stCfg.height);
+
+            this.worldContainer.add([bgSprite, rtBg, baseSprite, rtOver]);
+
+            const stObj = {
+                bgSprite,
+                rtBg,
+                baseSprite,
+                rtOver,
+                maskCanvas: null,
+                undoKey,
+                undoTex,
+                hasUndo: false,
+                bgLeftX,
+                bgCenterX,
+                bgCenterY,
+                bgW,
+                bgH,
+                centerX,
+                centerY,
+                cfg: stCfg
+            };
+
+            // Build 100% solid binary alpha mask for the Target PNG
+            this.rebuildStationBinaryMask(stObj);
+
+            this.stations.push(stObj);
+        });
+
+        this.stickerStampSprite = this.make.image({ x: 0, y: 0, key: 'logo', add: false }).setOrigin(0.5);
+
+        // 2. LIVE CURSORS
+        this.brushCursor = this.add.circle(150, 114, BRUSH_SIZES[this.selectedSizeIndex].radius)
+            .setStrokeStyle(1.5, SPRAY_COLORS[this.selectedColorIndex].hex, 0.85)
+            .setDepth(20)
+            .setVisible(false);
+
+        this.stickerPreview = this.add.image(150, 114, 'logo')
+            .setAlpha(0.75)
+            .setDepth(20)
+            .setVisible(false);
+
+        // 3. TOP HUD BAR (Includes Camera + Hamburger Menu Button)
+        this.buildTopBar();
+
+        // 4. SIDE COLUMNS (Left & Right 5-Slot Stack)
+        this.buildSideColumns();
+
+        // 5. BOTTOM TOOLBAR
+        this.buildBottomToolbar();
+
+        // 6. STICKER TRAY, HAMBURGER MENU MODAL & CREDITS MODAL
+        this.buildStickerTray();
+        this.buildHamburgerMenuModal();
+        this.buildCreditsModal();
+
+        // 7. INPUT & FILE UPLOAD LISTENERS (Target PNG + Background Image)
+        this.setupInputListeners();
+        this.setupFileUploadListeners();
+    }
+
+    // ========================================================================
+    // SOLID BINARY MASK BUILDER & PIXEL-PERFECT CLIPPING (FOR TARGET PNG LAYER 2)
+    // ========================================================================
+    rebuildStationBinaryMask(st) {
+        const w = st.cfg.width;
+        const h = st.cfg.height;
+        const baseImg = st.baseSprite.texture.getSourceImage();
+        if (!baseImg) return;
+
+        const maskCanvas = document.createElement('canvas');
+        maskCanvas.width = w;
+        maskCanvas.height = h;
+        const mCtx = maskCanvas.getContext('2d');
+        mCtx.clearRect(0, 0, w, h);
+        mCtx.drawImage(baseImg, 0, 0, w, h);
+
+        try {
+            const imgData = mCtx.getImageData(0, 0, w, h);
+            const data = imgData.data;
+            const threshold = ASSETS_CONFIG.gameplay.maskAlphaThreshold !== undefined
+                ? ASSETS_CONFIG.gameplay.maskAlphaThreshold
+                : 10;
+
+            for (let i = 0; i < data.length; i += 4) {
+                if (data[i + 3] >= threshold) {
+                    data[i] = 255;
+                    data[i + 1] = 255;
+                    data[i + 2] = 255;
+                    data[i + 3] = 255;
+                } else {
+                    data[i + 3] = 0;
+                }
+            }
+            mCtx.putImageData(imgData, 0, 0);
+        } catch (err) {
+            mCtx.drawImage(baseImg, 0, 0, w, h);
+            mCtx.drawImage(baseImg, 0, 0, w, h);
+            mCtx.drawImage(baseImg, 0, 0, w, h);
+        }
+
+        st.maskCanvas = maskCanvas;
+    }
+
+    applyLayerMask(st, layerNum) {
+        // Layer 1 draws directly on the full 300x250 Background Image (no PNG mask)
+        // Layer 2 draws on the Target PNG and clips to the PNG's opaque pixels
+        if (layerNum !== 2 || !ASSETS_CONFIG.gameplay.maskTopLayer) return;
+
+        const targetRt = st.rtOver;
+        const rtCanvas = targetRt.canvas || targetRt.texture.getSourceImage();
+        const ctx = targetRt.context || (rtCanvas && rtCanvas.getContext('2d'));
+        const maskSource = st.maskCanvas || st.baseSprite.texture.getSourceImage();
+
+        if (!ctx || !maskSource) return;
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-in';
+        ctx.drawImage(maskSource, 0, 0, st.cfg.width, st.cfg.height);
+        ctx.restore();
+    }
+
+    // ========================================================================
+    // TOP BAR & SIDE COLUMNS
+    // ========================================================================
+    buildTopBar() {
+        const m = ASSETS_CONFIG.uiMetrics;
+        const y = m.topBarY;
+        const sz = m.topIconSize;
+
+        this.add.image(150, y, 'topBarBg').setDisplaySize(300, 32).setDepth(25);
+        this.add.image(32, y, 'logo').setDisplaySize(50, 16).setDepth(26);
+
+        // Top Feed Text (Uses Raleway)
+        this.statusText = this.add.text(142, y, this.getStationTitle(0), {
+            fontFamily: ASSETS_CONFIG.fontFamily,
+            fontSize: '11px',
+            color: '#ffffff',
+            fontStyle: '900'
+        }).setOrigin(0.5).setDepth(26);
+
+        // Snapshot Camera Button
+        this.camBtn = this.add.image(m.camBtnX, y, 'camIcon')
+            .setDisplaySize(sz, sz)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(27);
+        this.camBtn.on('pointerdown', (p, lx, ly, ev) => { ev.stopPropagation(); this.takeSnapshot(); });
+
+        // Hamburger Menu Button
+        this.menuBtn = this.add.image(m.menuBtnX, y, 'menuBtn')
+            .setDisplaySize(sz, sz)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(27);
+        this.menuBtn.on('pointerdown', (p, lx, ly, ev) => { ev.stopPropagation(); this.openHamburgerMenu(); });
+    }
+
+    buildSideColumns() {
+        const m = ASSETS_CONFIG.uiMetrics;
+        const lx = m.leftColX;
+        const rx = m.rightColX;
+        const bSz = m.sideBtnSize;
+        const selCol = m.selectedBorderColor;
+        const selW = m.selectedBorderWidth;
+
+        // --------------------------------------------------------------------
+        // LEFT COLUMN (Splatter -> Sticker -> Left Arrow -> Zoom Out -> Rainbow)
+        // --------------------------------------------------------------------
+        this.splatHighlight = this.add.rectangle(lx, m.slotTopY, bSz + 2, bSz + 2)
+            .setStrokeStyle(selW, selCol)
+            .setVisible(this.isSplatMode)
+            .setDepth(28);
+        this.splatBtn = this.add.image(lx, m.slotTopY, 'splatBtn')
+            .setDisplaySize(bSz, bSz)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(27);
+        this.splatBtn.on('pointerdown', (p, x, y, ev) => { ev.stopPropagation(); this.toggleSplatMode(); });
+
+        this.stickerBtnHighlight = this.add.rectangle(lx, m.slotUpperMidY, bSz + 2, bSz + 2)
+            .setStrokeStyle(selW, selCol)
+            .setVisible(false)
+            .setDepth(28);
+        this.stickerBtn = this.add.image(lx, m.slotUpperMidY, 'stickerBtn')
+            .setDisplaySize(bSz, bSz)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(27);
+        this.stickerBtn.on('pointerdown', (p, x, y, ev) => { ev.stopPropagation(); this.toggleStickerTray(); });
+
+        this.leftArrow = this.add.image(lx, m.arrowCenterY, 'arrowLeft')
+            .setDisplaySize(m.arrowWidth, m.arrowHeight)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(25);
+        this.leftArrow.on('pointerdown', (p, x, y, ev) => { ev.stopPropagation(); this.panStation(-1); });
+
+        this.zoomOutBtn = this.add.image(lx, m.slotLowerMidY, 'zoomOutBtn')
+            .setDisplaySize(bSz, bSz)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(25);
+        this.zoomOutBtn.on('pointerdown', (p, x, y, ev) => { ev.stopPropagation(); this.changeZoom(-m.zoomStep); });
+
+        this.rainbowHighlight = this.add.rectangle(lx, m.slotBottomY, bSz + 2, bSz + 2)
+            .setStrokeStyle(selW, selCol)
+            .setVisible(this.isRainbowMode)
+            .setDepth(28);
+        this.rainbowBtn = this.add.image(lx, m.slotBottomY, 'rainbowBtn')
+            .setDisplaySize(bSz, bSz)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(27);
+        this.rainbowBtn.on('pointerdown', (p, x, y, ev) => { ev.stopPropagation(); this.toggleRainbowOrRotateSticker(); });
+
+        // --------------------------------------------------------------------
+        // RIGHT COLUMN (Layers -> Undo -> Right Arrow -> Zoom In -> Drip)
+        // --------------------------------------------------------------------
+        this.layersHighlight = this.add.rectangle(rx, m.slotTopY, bSz + 2, bSz + 2)
+            .setStrokeStyle(selW, selCol)
+            .setVisible(this.currentLayer === 2)
+            .setDepth(28);
+        this.layersBtn = this.add.image(rx, m.slotTopY, 'layersBtn')
+            .setDisplaySize(bSz, bSz)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(27);
+        this.layersBtn.on('pointerdown', (p, x, y, ev) => { ev.stopPropagation(); this.toggleLayer(); });
+
+        this.undoBtn = this.add.image(rx, m.slotUpperMidY, 'undoBtn')
+            .setDisplaySize(bSz, bSz)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(25);
+        this.undoBtn.on('pointerdown', (p, x, y, ev) => { ev.stopPropagation(); this.performUndo(); });
+
+        this.rightArrow = this.add.image(rx, m.arrowCenterY, 'arrowRight')
+            .setDisplaySize(m.arrowWidth, m.arrowHeight)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(25);
+        this.rightArrow.on('pointerdown', (p, x, y, ev) => { ev.stopPropagation(); this.panStation(1); });
+
+        this.zoomInBtn = this.add.image(rx, m.slotLowerMidY, 'zoomInBtn')
+            .setDisplaySize(bSz, bSz)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(25);
+        this.zoomInBtn.on('pointerdown', (p, x, y, ev) => { ev.stopPropagation(); this.changeZoom(m.zoomStep); });
+
+        this.dripHighlight = this.add.rectangle(rx, m.slotBottomY, bSz + 2, bSz + 2)
+            .setStrokeStyle(selW, selCol)
+            .setVisible(this.isDripMode)
+            .setDepth(28);
+        this.dripBtn = this.add.image(rx, m.slotBottomY, 'dripBtn')
+            .setDisplaySize(bSz, bSz)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(27);
+        this.dripBtn.on('pointerdown', (p, x, y, ev) => { ev.stopPropagation(); this.toggleDripMode(); });
+
+        this.updateArrowVisibility();
+    }
+
+    // ========================================================================
+    // HAMBURGER MENU MODAL (MUTE, TRANSPARENT BG, TARGET PNG, UPLOAD PNG & UPLOAD BG)
+    // ========================================================================
+    buildHamburgerMenuModal() {
+        const m = ASSETS_CONFIG.uiMetrics;
+        const t = ASSETS_CONFIG.text;
+        const font = ASSETS_CONFIG.fontFamily;
+
+        this.menuModal = this.add.container(0, 0).setDepth(110).setVisible(false);
+
+        const overlay = this.add.rectangle(150, 125, 300, 250, 0x000000, 0.88).setInteractive();
+        const panel = this.add.image(150, 125, 'menuBg').setDisplaySize(m.menuModalWidth, m.menuModalHeight);
+
+        // "OPTIONS & TOOLS" Image Header
+        const titleImg = this.add.image(150, m.menuTitleY, 'menuTitleImg')
+            .setDisplaySize(m.menuTitleWidth, m.menuTitleHeight);
+
+        const closeBtn = this.add.image(m.menuCloseBtnX, m.menuCloseBtnY, 'closeBtn')
+            .setDisplaySize(24, 24)
+            .setInteractive({ useHandCursor: true });
+        closeBtn.on('pointerdown', (p, x, y, ev) => {
+            ev.stopPropagation();
+            this.closeHamburgerMenu();
+        });
+
+        // Row 1: Sound FX (Mute / Unmute)
+        const muteLabel = this.add.text(m.menuLabelX, m.menuRow1Y, t.menuMuteRowLabel, {
+            fontFamily: font,
+            fontSize: '10px',
+            color: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0, 0.5);
+
+        this.menuMuteBtn = this.add.image(m.menuActionX, m.menuRow1Y, this.isMuted ? 'muteOn' : 'muteOff')
+            .setDisplaySize(20, 20)
+            .setInteractive({ useHandCursor: true });
+        this.menuMuteBtn.on('pointerdown', (p, x, y, ev) => {
+            ev.stopPropagation();
+            this.toggleMute();
+        });
+
+        // Row 2: Transparent Background Toggle (Hides/Shows Station Background)
+        const transLabel = this.add.text(m.menuLabelX, m.menuRow2Y, t.menuTransRowLabel, {
+            fontFamily: font,
+            fontSize: '10px',
+            color: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0, 0.5);
+
+        this.menuTransBtn = this.add.image(
+            m.menuActionX,
+            m.menuRow2Y,
+            this.isTransparentBg ? 'transBgOn' : 'transBgOff'
+        )
+            .setDisplaySize(m.toggleBtnWidth, m.toggleBtnHeight)
+            .setInteractive({ useHandCursor: true });
+
+        this.menuTransBtn.on('pointerdown', (p, x, y, ev) => {
+            ev.stopPropagation();
+            this.toggleTransparentBg();
+        });
+
+        // Row 3: Show/Hide Target PNG Toggle (Allows painting just the background image!)
+        const targetPngLabel = this.add.text(m.menuLabelX, m.menuRow3Y, t.menuTargetPngRowLabel, {
+            fontFamily: font,
+            fontSize: '10px',
+            color: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0, 0.5);
+
+        this.menuTargetPngBtn = this.add.image(
+            m.menuActionX,
+            m.menuRow3Y,
+            this.isTargetPngVisible ? 'targetPngOn' : 'targetPngOff'
+        )
+            .setDisplaySize(m.toggleBtnWidth, m.toggleBtnHeight)
+            .setInteractive({ useHandCursor: true });
+
+        this.menuTargetPngBtn.on('pointerdown', (p, x, y, ev) => {
+            ev.stopPropagation();
+            this.toggleTargetPngVisibility();
+        });
+
+        // Row 4: Upload Custom Target PNG Button (for current station)
+        const uploadLabel = this.add.text(m.menuLabelX, m.menuRow4Y, t.menuUploadRowLabel, {
+            fontFamily: font,
+            fontSize: '10px',
+            color: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0, 0.5);
+
+        this.menuUploadBtn = this.add.image(m.menuActionX - 10, m.menuRow4Y, 'uploadBtn')
+            .setDisplaySize(m.uploadBtnWidth, m.uploadBtnHeight)
+            .setInteractive({ useHandCursor: true });
+
+        this.menuUploadBtn.on('pointerdown', (p, x, y, ev) => {
+            ev.stopPropagation();
+            this.triggerPngUpload();
+        });
+
+        // Row 5: Upload Custom Background Image Button (for current station)
+        const uploadBgLabel = this.add.text(m.menuLabelX, m.menuRow5Y, t.menuUploadBgRowLabel, {
+            fontFamily: font,
+            fontSize: '10px',
+            color: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0, 0.5);
+
+        this.menuUploadBgBtn = this.add.image(m.menuActionX - 10, m.menuRow5Y, 'uploadBgBtn')
+            .setDisplaySize(m.uploadBtnWidth, m.uploadBtnHeight)
+            .setInteractive({ useHandCursor: true });
+
+        this.menuUploadBgBtn.on('pointerdown', (p, x, y, ev) => {
+            ev.stopPropagation();
+            this.triggerBgUpload();
+        });
+
+        // Bottom Status / Error Feedback Line inside Menu
+        this.menuStatusText = this.add.text(150, m.menuHintY, t.menuHintDefault, {
+            fontFamily: font,
+            fontSize: '9.5px',
+            color: '#aaaaaa',
+            fontStyle: 'bold',
+            align: 'center'
+        }).setOrigin(0.5);
+
+        this.menuModal.add([
+            overlay,
+            panel,
+            titleImg,
+            closeBtn,
+            muteLabel,
+            this.menuMuteBtn,
+            transLabel,
+            this.menuTransBtn,
+            targetPngLabel,
+            this.menuTargetPngBtn,
+            uploadLabel,
+            this.menuUploadBtn,
+            uploadBgLabel,
+            this.menuUploadBgBtn,
+            this.menuStatusText
+        ]);
+    }
+
+    openHamburgerMenu() {
+        this.stopDrawing();
+        if (this.isTrayOpen) {
+            this.isTrayOpen = false;
+            this.stickerTray.setVisible(false);
+        }
+        this.isModalOpen = true;
+        this.isMenuOpen = true;
+        this.menuStatusText.setText(ASSETS_CONFIG.text.menuHintDefault).setColor('#aaaaaa');
+        this.menuModal.setVisible(true).setAlpha(0);
+        this.playSound('menuOpenSfx');
+        this.tweens.add({ targets: this.menuModal, alpha: 1, duration: 150 });
+    }
+
+    closeHamburgerMenu() {
+        this.playSound('menuCloseSfx');
+        this.isModalOpen = false;
+        this.isMenuOpen = false;
+        this.menuModal.setVisible(false);
+    }
+
+    updateBackgroundVisibility() {
+        const showBg = !(this.isTransparentBg && ASSETS_CONFIG.gameplay.hideWallWhenTransparent);
+        this.stations.forEach(st => {
+            st.bgSprite.setVisible(showBg);
+            st.rtBg.setVisible(showBg);
+        });
+    }
+
+    toggleTransparentBg() {
+        const m = ASSETS_CONFIG.uiMetrics;
+        const t = ASSETS_CONFIG.text;
+
+        this.isTransparentBg = !this.isTransparentBg;
+        this.menuTransBtn
+            .setTexture(this.isTransparentBg ? 'transBgOn' : 'transBgOff')
+            .setDisplaySize(m.toggleBtnWidth, m.toggleBtnHeight);
+
+        this.updateBackgroundVisibility();
+
+        // If user hides the background while on Layer 1 (BG), make sure Target PNG is visible and switch to Layer 2
+        if (this.isTransparentBg) {
+            if (!this.isTargetPngVisible) {
+                this.isTargetPngVisible = true;
+                this.menuTargetPngBtn.setTexture('targetPngOn').setDisplaySize(m.toggleBtnWidth, m.toggleBtnHeight);
+                this.stations.forEach(st => {
+                    st.baseSprite.setVisible(true);
+                    st.rtOver.setVisible(true);
+                });
+            }
+            this.currentLayer = 2;
+            this.layersHighlight.setVisible(true);
+        }
+
+        const msg = this.isTransparentBg ? t.transBgOnStatus : t.transBgOffStatus;
+        const col = this.isTransparentBg ? '#00ffcc' : '#ffcc00';
+        this.menuStatusText.setText(msg).setColor(col);
+        this.flashStatus(msg, col, 900);
+        this.playSound('transToggleSfx');
+    }
+
+    toggleTargetPngVisibility() {
+        const m = ASSETS_CONFIG.uiMetrics;
+        const t = ASSETS_CONFIG.text;
+
+        this.isTargetPngVisible = !this.isTargetPngVisible;
+        this.menuTargetPngBtn
+            .setTexture(this.isTargetPngVisible ? 'targetPngOn' : 'targetPngOff')
+            .setDisplaySize(m.toggleBtnWidth, m.toggleBtnHeight);
+
+        // Show or hide the target PNG and its masked top paint layer across all stations
+        this.stations.forEach(st => {
+            st.baseSprite.setVisible(this.isTargetPngVisible);
+            st.rtOver.setVisible(this.isTargetPngVisible);
+        });
+
+        // Automatically switch to Layer 1 (Background Image) when PNG is hidden, or back to Layer 2 when shown
+        if (!this.isTargetPngVisible) {
+            this.currentLayer = 1;
+            this.layersHighlight.setVisible(false);
+            if (this.isTransparentBg) {
+                this.isTransparentBg = false;
+                this.menuTransBtn.setTexture('transBgOff').setDisplaySize(m.toggleBtnWidth, m.toggleBtnHeight);
+                this.updateBackgroundVisibility();
+            }
+        } else {
+            this.currentLayer = 2;
+            this.layersHighlight.setVisible(true);
+        }
+
+        const msg = this.isTargetPngVisible ? t.targetPngOnStatus : t.targetPngOffStatus;
+        const col = this.isTargetPngVisible ? '#00ffcc' : '#ffcc00';
+        this.menuStatusText.setText(msg).setColor(col);
+        this.flashStatus(msg, col, 950);
+        this.playSound('targetToggleSfx');
+    }
+
+    // ========================================================================
+    // CUSTOM TARGET PNG & CUSTOM STATION BACKGROUND UPLOADS
+    // ========================================================================
+    triggerPngUpload() {
+        const fileInput = document.getElementById('png-upload-input');
+        if (fileInput) {
+            fileInput.value = '';
+            fileInput.click();
+        }
+    }
+
+    triggerBgUpload() {
+        const bgInput = document.getElementById('bg-upload-input');
+        if (bgInput) {
+            bgInput.value = '';
+            bgInput.click();
+        }
+    }
+
+    setupFileUploadListeners() {
+        const gCfg = ASSETS_CONFIG.gameplay;
+        const t = ASSETS_CONFIG.text;
+        const maxBytes = (gCfg.maxUploadFileSizeKB || 2048) * 1024;
+        const maxW = gCfg.maxUploadWidth || 1500;
+        const maxH = gCfg.maxUploadHeight || 1500;
+
+        // 1. Target PNG Upload Listener
+        const pngInput = document.getElementById('png-upload-input');
+        if (pngInput) {
+            pngInput.addEventListener('change', (ev) => {
+                const file = ev.target.files && ev.target.files[0];
+                if (!file) return;
+
+                if (file.type !== 'image/png' && !file.name.toLowerCase().endsWith('.png')) {
+                    this.showUploadError(t.uploadFormatError);
+                    return;
+                }
+                if (file.size > maxBytes) {
+                    this.showUploadError(t.uploadFileSizeError);
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (loadEv) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        if (img.width > maxW || img.height > maxH) {
+                            this.showUploadError(t.uploadDimensionError);
+                            return;
+                        }
+                        this.applyUploadedPngToStation(img);
+                    };
+                    img.onerror = () => this.showUploadError(t.uploadFormatError);
+                    img.src = loadEv.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // 2. Per-Station Background Upload Listener
+        const bgInput = document.getElementById('bg-upload-input');
+        if (bgInput) {
+            bgInput.addEventListener('change', (ev) => {
+                const file = ev.target.files && ev.target.files[0];
+                if (!file) return;
+
+                const validTypes = ['image/png', 'image/jpeg', 'image/webp'];
+                const lowerName = file.name.toLowerCase();
+                const validExt = lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || lowerName.endsWith('.webp');
+
+                if (!validTypes.includes(file.type) && !validExt) {
+                    this.showUploadError(t.uploadBgFormatError);
+                    return;
+                }
+                if (file.size > maxBytes) {
+                    this.showUploadError(t.uploadFileSizeError);
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (loadEv) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        if (img.width > maxW || img.height > maxH) {
+                            this.showUploadError(t.uploadDimensionError);
+                            return;
+                        }
+                        this.applyUploadedBgToStation(img);
+                    };
+                    img.onerror = () => this.showUploadError(t.uploadBgFormatError);
+                    img.src = loadEv.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+    }
+
+    showUploadError(errorMsg) {
+        this.playSound('uploadErrorSfx');
+        if (this.menuStatusText) {
+            this.menuStatusText.setText(errorMsg).setColor('#ff0055');
+        }
+        this.flashStatus(errorMsg, '#ff0055', 1800);
+        this.cameras.main.shake(110, 0.01);
+    }
+
+    applyUploadedPngToStation(imgElement) {
+        const st = this.stations[this.currentStation];
+        const w = st.cfg.width;
+        const h = st.cfg.height;
+        const customKey = `custom_station_${this.currentStation}_${Date.now()}`;
+
+        const texCanvas = this.textures.createCanvas(customKey, w, h);
+        const ctx = texCanvas.context;
+        ctx.clearRect(0, 0, w, h);
+
+        const scale = Math.min(w / imgElement.width, h / imgElement.height);
+        const drawW = imgElement.width * scale;
+        const drawH = imgElement.height * scale;
+        const offsetX = (w - drawW) / 2;
+        const offsetY = (h - drawH) / 2;
+
+        ctx.drawImage(imgElement, offsetX, offsetY, drawW, drawH);
+        texCanvas.refresh();
+
+        st.baseSprite.setTexture(customKey).setDisplaySize(w, h);
+
+        if (!this.isTargetPngVisible) {
+            this.toggleTargetPngVisibility();
+        }
+
+        this.rebuildStationBinaryMask(st);
+        this.applyLayerMask(st, 2);
+
+        const t = ASSETS_CONFIG.text;
+        this.playSound('uploadSuccessSfx');
+        if (this.menuStatusText) {
+            this.menuStatusText.setText(t.uploadSuccessStatus).setColor('#00ffcc');
+        }
+        this.flashStatus(t.uploadSuccessStatus, '#00ffcc', 1200);
+
+        this.time.delayedCall(450, () => {
+            if (this.isMenuOpen) this.closeHamburgerMenu();
+        });
+    }
+
+    applyUploadedBgToStation(imgElement) {
+        const st = this.stations[this.currentStation];
+        const bgW = st.bgW;
+        const bgH = st.bgH;
+        const customBgKey = `custom_bg_${this.currentStation}_${Date.now()}`;
+
+        const texCanvas = this.textures.createCanvas(customBgKey, bgW, bgH);
+        const ctx = texCanvas.context;
+        ctx.fillStyle = '#141416';
+        ctx.fillRect(0, 0, bgW, bgH);
+
+        // Cover-fit uploaded background to 300x250 station area
+        const scale = Math.max(bgW / imgElement.width, bgH / imgElement.height);
+        const drawW = imgElement.width * scale;
+        const drawH = imgElement.height * scale;
+        const offsetX = (bgW - drawW) / 2;
+        const offsetY = (bgH - drawH) / 2;
+
+        ctx.drawImage(imgElement, offsetX, offsetY, drawW, drawH);
+        texCanvas.refresh();
+
+        st.bgSprite.setTexture(customBgKey).setDisplaySize(bgW, bgH);
+
+        // Make sure background is visible if Transparent BG was turned on
+        if (this.isTransparentBg) {
+            this.toggleTransparentBg();
+        }
+
+        const t = ASSETS_CONFIG.text;
+        this.playSound('uploadBgSuccessSfx');
+        if (this.menuStatusText) {
+            this.menuStatusText.setText(t.uploadBgSuccessStatus).setColor('#00ffcc');
+        }
+        this.flashStatus(t.uploadBgSuccessStatus, '#00ffcc', 1200);
+
+        this.time.delayedCall(450, () => {
+            if (this.isMenuOpen) this.closeHamburgerMenu();
+        });
+    }
+
+    getStationTitle(index) {
+        const rawName = ASSETS_CONFIG.stations[index].name;
+        const layerTag = (!this.isTargetPngVisible || this.currentLayer === 1) ? ` [BG]` : ` [PNG]`;
+        const zoomTag = this.zoomLevel > 1 ? ` [${this.zoomLevel.toFixed(1)}x]` : '';
+        return `${rawName}${layerTag}${zoomTag}`;
+    }
+
+    flashStatus(message, color = '#00ffcc', duration = 850) {
+        this.statusText.setText(message).setColor(color);
+        if (this.statusTimer) this.statusTimer.remove(false);
+        this.statusTimer = this.time.delayedCall(duration, () => {
+            this.statusText.setText(this.getStationTitle(this.currentStation)).setColor('#ffffff');
+        });
+    }
+
+    updateCursorStyle() {
+        if (this.activeSticker) {
+            this.brushCursor.setVisible(false);
+            this.stickerPreview
+                .setTexture(this.activeSticker.key)
+                .setAngle(this.stickerAngle)
+                .setDisplaySize(
+                    this.activeSticker.width * this.zoomLevel,
+                    this.activeSticker.height * this.zoomLevel
+                );
+            return;
+        }
+
+        this.stickerPreview.setVisible(false);
+        const r = BRUSH_SIZES[this.selectedSizeIndex].radius * this.zoomLevel;
+        this.brushCursor.setRadius(r);
+        if (this.isEraser) {
+            this.brushCursor.setStrokeStyle(1.5, 0xff99aa, 0.9);
+        } else {
+            const hex = SPRAY_COLORS[this.selectedColorIndex].hex;
+            this.brushCursor.setStrokeStyle(1.5, hex === 0x111111 ? 0xffffff : hex, 0.85);
+        }
+    }
+
+    // ========================================================================
+    // FEATURE TOGGLES (LAYERS: TARGET PNG vs BACKGROUND IMAGE, DRIP, SPLAT, RAINBOW)
+    // ========================================================================
+    toggleLayer() {
+        if (this.isModalOpen) return;
+        const t = ASSETS_CONFIG.text;
+
+        if (!this.isTargetPngVisible) {
+            this.playSound('uploadErrorSfx');
+            this.flashStatus(t.pngHiddenLayerNotice, '#ff99aa', 1100);
+            return;
+        }
+
+        if (this.currentLayer === 2 && this.isTransparentBg && ASSETS_CONFIG.gameplay.hideWallWhenTransparent) {
+            this.playSound('uploadErrorSfx');
+            this.flashStatus(t.bgHiddenLayerNotice, '#ff99aa', 1100);
+            return;
+        }
+
+        this.playSound('layersSfx');
+
+        if (this.currentLayer === 1) {
+            this.currentLayer = 2;
+            this.layersHighlight.setVisible(true);
+            this.flashStatus(t.layer2Status, '#00ffcc');
+        } else {
+            this.currentLayer = 1;
+            this.layersHighlight.setVisible(false);
+            this.flashStatus(t.layer1Status, '#ffcc00');
+        }
+    }
+
+    toggleDripMode() {
+        if (this.isModalOpen) return;
+        this.isDripMode = !this.isDripMode;
+        this.dripHighlight.setVisible(this.isDripMode);
+        this.playSound('dripToggleSfx');
+        const t = ASSETS_CONFIG.text;
+        this.flashStatus(this.isDripMode ? t.dripOnStatus : t.dripOffStatus, this.isDripMode ? '#00dd44' : '#cccccc');
+    }
+
+    toggleSplatMode() {
+        if (this.isModalOpen) return;
+        this.isSplatMode = !this.isSplatMode;
+        this.splatHighlight.setVisible(this.isSplatMode);
+        this.playSound('splatToggleSfx');
+        const t = ASSETS_CONFIG.text;
+        this.flashStatus(this.isSplatMode ? t.splatOnStatus : t.splatOffStatus, this.isSplatMode ? '#ff7700' : '#cccccc');
+    }
+
+    toggleRainbowOrRotateSticker() {
+        if (this.isModalOpen) return;
+        const t = ASSETS_CONFIG.text;
+
+        if (this.activeSticker) {
+            const step = ASSETS_CONFIG.gameplay.stickerRotateStep || 15;
+            this.stickerAngle = (this.stickerAngle + step) % 360;
+            this.updateCursorStyle();
+            this.playSound('rainbowToggleSfx');
+            this.flashStatus(`${t.stickerRotatePrefix}${this.stickerAngle}°`, '#ffff00');
+            return;
+        }
+
+        this.isRainbowMode = !this.isRainbowMode;
+        this.rainbowHighlight.setVisible(this.isRainbowMode);
+        this.playSound('rainbowToggleSfx');
+        this.flashStatus(this.isRainbowMode ? t.rainbowOnStatus : t.rainbowOffStatus, this.isRainbowMode ? '#ff33aa' : '#cccccc');
+    }
+
+    // ========================================================================
+    // ZOOM IN & ZOOM OUT ENGINE
+    // ========================================================================
+    changeZoom(delta, pivotScreenX = 150, pivotScreenY = 114) {
+        if (this.isPanning || this.isModalOpen) return;
+        const m = ASSETS_CONFIG.uiMetrics;
+        const oldZoom = this.zoomLevel;
+        const newZoom = Phaser.Math.Clamp(
+            Math.round((this.zoomLevel + delta) * 100) / 100,
+            m.minZoom,
+            m.maxZoom
+        );
+
+        if (newZoom === oldZoom) return;
+
+        this.playSound(newZoom > oldZoom ? 'zoomInSfx' : 'zoomOutSfx');
+        this.zoomLevel = newZoom;
+
+        if (newZoom <= 1.0) {
+            this.panOffsetX = 0;
+            this.panOffsetY = 0;
+        } else {
+            const ratio = newZoom / oldZoom;
+            this.panOffsetX = (pivotScreenX - 150) - ((pivotScreenX - 150 - this.panOffsetX) * ratio);
+            this.panOffsetY = (pivotScreenY - 114) - ((pivotScreenY - 114 - this.panOffsetY) * ratio);
+            this.clampPanOffsets();
+        }
+
+        this.applyWorldTransform();
+        this.updateCursorStyle();
+        this.flashStatus(this.getStationTitle(this.currentStation), '#00ffcc', 600);
+    }
+
+    clampPanOffsets() {
+        const maxPanX = Math.max(0, (300 * this.zoomLevel - 180) / 2);
+        const maxPanY = Math.max(0, (250 * this.zoomLevel - 120) / 2);
+        this.panOffsetX = Phaser.Math.Clamp(this.panOffsetX, -maxPanX, maxPanX);
+        this.panOffsetY = Phaser.Math.Clamp(this.panOffsetY, -maxPanY, maxPanY);
+    }
+
+    applyWorldTransform() {
+        const z = this.zoomLevel;
+        this.worldContainer.setScale(z);
+        this.worldContainer.x = (150 + this.panOffsetX) - (150 + this.currentStation * 300) * z;
+        this.worldContainer.y = (114 + this.panOffsetY) - 125 * z;
+    }
+
+    // ========================================================================
+    // 1-STEP "OOPS" UNDO SYSTEM (SAVES BOTH BG PAINT & TARGET PNG PAINT)
+    // ========================================================================
+    saveUndoState() {
+        const st = this.stations[this.currentStation];
+        const bgW = st.bgW;
+        const bgH = st.bgH;
+        const overH = st.cfg.height;
+
+        const ctx = st.undoTex.context;
+        ctx.clearRect(0, 0, bgW, bgH + overH);
+        ctx.drawImage(st.rtBg.texture.getSourceImage(), 0, 0);
+        ctx.drawImage(st.rtOver.texture.getSourceImage(), 0, bgH);
+        st.undoTex.refresh();
+        st.hasUndo = true;
+    }
+
+    performUndo() {
+        this.playSound('undoSfx');
+        const st = this.stations[this.currentStation];
+        const bgW = st.bgW;
+        const bgH = st.bgH;
+        const overH = st.cfg.height;
+        const t = ASSETS_CONFIG.text;
+
+        this.activeDrips = this.activeDrips.filter(d => d.stationIndex !== this.currentStation);
+
+        if (!st.hasUndo) {
+            this.flashStatus(t.undoEmptyStatus, '#ff99aa', 700);
+            return;
+        }
+
+        const currentCanvas = document.createElement('canvas');
+        currentCanvas.width = bgW;
+        currentCanvas.height = bgH + overH;
+        const cCtx = currentCanvas.getContext('2d');
+        cCtx.drawImage(st.rtBg.texture.getSourceImage(), 0, 0);
+        cCtx.drawImage(st.rtOver.texture.getSourceImage(), 0, bgH);
+
+        st.rtBg.clear();
+        st.rtOver.clear();
+        st.rtBg.draw(st.undoKey, 0, 0);
+        st.rtOver.draw(st.undoKey, 0, -bgH);
+
+        const ctx = st.undoTex.context;
+        ctx.clearRect(0, 0, bgW, bgH + overH);
+        ctx.drawImage(currentCanvas, 0, 0);
+        st.undoTex.refresh();
+
+        this.flashStatus(t.undoSuccessStatus, '#00ffcc', 800);
+    }
+
+    // ========================================================================
+    // SCROLLABLE STICKER TRAY (TRANSPARENT SLOT BACKGROUNDS + BLACK BORDER)
+    // ========================================================================
+    buildStickerTray() {
+        const m = ASSETS_CONFIG.uiMetrics;
+        this.stickerTray = this.add.container(0, 0).setDepth(60).setVisible(false);
+
+        const bg = this.add.image(m.trayX, m.trayY, 'stickerTrayBg')
+            .setDisplaySize(m.trayWidth, m.trayHeight)
+            .setInteractive();
+
+        const viewWidth = m.trayWidth - 52;
+        const viewLeft = m.trayX - viewWidth / 2;
+        const viewTop = m.trayY - m.trayHeight / 2 + 4;
+
+        const maskShape = this.make.graphics({ x: 0, y: 0, add: false });
+        maskShape.fillStyle(0xffffff);
+        maskShape.fillRect(viewLeft, viewTop, viewWidth, m.trayHeight - 8);
+        const trayMask = maskShape.createGeometryMask();
+
+        this.trayItemsContainer = this.add.container(viewLeft + 28, m.trayY);
+        this.trayItemsContainer.setMask(trayMask);
+
+        this.stickerThumbBoxes = [];
+        ASSETS_CONFIG.stickers.forEach((sk, idx) => {
+            const itemX = idx * m.trayItemSpacing;
+
+            const slotBg = this.add.rectangle(itemX, 0, m.trayThumbSize + 6, m.trayThumbSize + 6)
+                .setFillStyle(0x000000, 0)
+                .setStrokeStyle(m.stickerSlotBorderWidth, m.stickerSlotBorderColor)
+                .setInteractive({ useHandCursor: true });
+
+            const scale = Math.min(m.trayThumbSize / sk.width, m.trayThumbSize / sk.height);
+            const thumb = this.add.image(itemX, 0, sk.key)
+                .setDisplaySize(sk.width * scale, sk.height * scale);
+
+            slotBg.on('pointerup', () => {
+                if (this.trayDragMoved) return;
+                this.selectSticker(sk, idx);
+            });
+
+            this.stickerThumbBoxes.push(slotBg);
+            this.trayItemsContainer.add([slotBg, thumb]);
+        });
+
+        const totalContentWidth = Math.max(0, (ASSETS_CONFIG.stickers.length - 1) * m.trayItemSpacing + m.trayThumbSize + 12);
+        this.maxTrayScroll = Math.max(0, totalContentWidth - viewWidth);
+        this.trayBaseX = viewLeft + 28;
+
+        const leftScrollBtn = this.add.image(m.trayX - m.trayWidth / 2 + 13, m.trayY, 'arrowLeft')
+            .setDisplaySize(16, 42)
+            .setInteractive({ useHandCursor: true });
+        leftScrollBtn.on('pointerdown', (p, lx, ly, ev) => {
+            ev.stopPropagation();
+            this.scrollStickerTray(-m.trayItemSpacing * 1.5);
+            this.playSound('trayScrollSfx');
+        });
+
+        const rightScrollBtn = this.add.image(m.trayX + m.trayWidth / 2 - 13, m.trayY, 'arrowRight')
+            .setDisplaySize(16, 42)
+            .setInteractive({ useHandCursor: true });
+        rightScrollBtn.on('pointerdown', (p, lx, ly, ev) => {
+            ev.stopPropagation();
+            this.scrollStickerTray(m.trayItemSpacing * 1.5);
+            this.playSound('trayScrollSfx');
+        });
+
+        bg.on('pointerdown', (pointer, lx, ly, ev) => {
+            ev.stopPropagation();
+            this.isDraggingTray = true;
+            this.trayDragStartX = pointer.x;
+            this.trayDragStartScroll = this.trayScrollX;
+            this.trayDragMoved = false;
+        });
+
+        this.stickerTray.add([bg, this.trayItemsContainer, leftScrollBtn, rightScrollBtn]);
+    }
+
+    scrollStickerTray(deltaX) {
+        this.trayScrollX = Phaser.Math.Clamp(this.trayScrollX + deltaX, 0, this.maxTrayScroll);
+        this.trayItemsContainer.x = this.trayBaseX - this.trayScrollX;
+    }
+
+    toggleStickerTray() {
+        if (this.isModalOpen) return;
+        this.stopDrawing();
+        this.isTrayOpen = !this.isTrayOpen;
+        this.playSound('trayToggleSfx');
+        const t = ASSETS_CONFIG.text;
+
+        if (this.isTrayOpen) {
+            this.stickerTray.setVisible(true).setAlpha(0);
+            this.tweens.add({ targets: this.stickerTray, alpha: 1, duration: 120 });
+            this.stickerBtnHighlight.setVisible(true);
+            this.statusText.setText(t.stickerTrayPrompt).setColor('#00ffcc');
+        } else {
+            this.stickerTray.setVisible(false);
+            if (!this.activeSticker) {
+                this.stickerBtnHighlight.setVisible(false);
+                this.statusText.setText(this.getStationTitle(this.currentStation)).setColor('#ffffff');
+            }
+        }
+    }
+
+    selectSticker(stickerCfg, idx) {
+        this.playSound('stickerPickSfx');
+        this.activeSticker = stickerCfg;
+        this.stickerAngle = 0;
+        this.isEraser = false;
+
+        const m = ASSETS_CONFIG.uiMetrics;
+        this.stickerThumbBoxes.forEach((box, i) => {
+            if (i === idx) {
+                box.setStrokeStyle(m.selectedBorderWidth, m.selectedBorderColor);
+            } else {
+                box.setStrokeStyle(m.stickerSlotBorderWidth, m.stickerSlotBorderColor);
+            }
+        });
+        this.colorHighlight.setVisible(false);
+        this.eraserHighlight.setVisible(false);
+        this.stickerBtnHighlight.setVisible(true);
+
+        this.isTrayOpen = false;
+        this.stickerTray.setVisible(false);
+
+        this.updateCursorStyle();
+        this.statusText.setText(`${ASSETS_CONFIG.text.stickerSlapPrefix}${stickerCfg.name}`).setColor('#ffff00');
+    }
+
+    stampStickerAt(screenX, screenY) {
+        if (!this.activeSticker) return;
+        this.saveUndoState();
+
+        const st = this.stations[this.currentStation];
+        const cfg = st.cfg;
+        const worldX = (screenX - this.worldContainer.x) / this.zoomLevel;
+        const worldY = (screenY - this.worldContainer.y) / this.zoomLevel;
+
+        const activeLayer = this.isTargetPngVisible ? this.currentLayer : 1;
+        const targetRt = activeLayer === 2 ? st.rtOver : st.rtBg;
+
+        const localX = activeLayer === 2
+            ? worldX - (st.centerX - cfg.width / 2)
+            : worldX - st.bgLeftX;
+        const localY = activeLayer === 2
+            ? worldY - (st.centerY - cfg.height / 2)
+            : worldY;
+
+        this.stickerStampSprite
+            .setTexture(this.activeSticker.key)
+            .setAngle(this.stickerAngle)
+            .setDisplaySize(this.activeSticker.width, this.activeSticker.height);
+
+        targetRt.draw(this.stickerStampSprite, localX, localY);
+
+        this.applyLayerMask(st, activeLayer);
+
+        this.playSound('stickerSlapSfx');
+        this.cameras.main.shake(65, 0.007);
+    }
+
+    // ========================================================================
+    // BOTTOM TOOLBAR (ROW 1: COLORS + ERASE + CLEAR | ROW 2: CREDITS + 4 SIZES + 3 ICON STYLES)
+    // ========================================================================
+    buildBottomToolbar() {
+        const m = ASSETS_CONFIG.uiMetrics;
+        const selCol = m.selectedBorderColor;
+        const selW = m.selectedBorderWidth;
+
+        this.add.image(150, 223, 'bottomBarBg').setDisplaySize(300, 54).setDepth(25);
+
+        this.colorHighlight = this.add.rectangle(0, 0, m.colorBtnWidth + 2, m.colorBtnHeight + 2)
+            .setStrokeStyle(selW, selCol)
+            .setDepth(28);
+
+        this.eraserHighlight = this.add.rectangle(m.eraserBtnX, m.row1Y, m.eraserBtnWidth + 2, m.eraserBtnHeight + 2)
+            .setStrokeStyle(selW, selCol)
+            .setVisible(false)
+            .setDepth(28);
+
+        this.sizeHighlight = this.add.rectangle(0, 0, m.sizeBtnWidth + 2, m.sizeBtnHeight + 2)
+            .setStrokeStyle(selW, selCol)
+            .setDepth(28);
+
+        this.styleHighlight = this.add.rectangle(0, 0, m.styleBtnWidth + 2, m.styleBtnHeight + 2)
+            .setStrokeStyle(selW, selCol)
+            .setDepth(28);
+
+        // ROW 1: 9 Spray Colors + Eraser + Clear All
+        this.colorBtns = [];
+        SPRAY_COLORS.forEach((col, idx) => {
+            const x = m.colorStartX + idx * m.colorSpacingX;
+            const y = m.row1Y;
+
+            const btn = this.add.image(x, y, col.key)
+                .setDisplaySize(m.colorBtnWidth, m.colorBtnHeight)
+                .setInteractive({ useHandCursor: true })
+                .setDepth(27);
+
+            if (idx === this.selectedColorIndex) {
+                this.colorHighlight.setPosition(x, y);
+            }
+
+            btn.on('pointerdown', (p, lx, ly, ev) => {
+                ev.stopPropagation();
+                this.isEraser = false;
+                this.activeSticker = null;
+                this.isTrayOpen = false;
+                this.stickerTray.setVisible(false);
+                this.stickerBtnHighlight.setVisible(false);
+
+                this.selectedColorIndex = idx;
+                this.colorHighlight.setVisible(true).setPosition(x, y);
+                this.eraserHighlight.setVisible(false);
+                this.statusText.setText(this.getStationTitle(this.currentStation)).setColor('#ffffff');
+                this.updateCursorStyle();
+                this.playSound('canShake');
+            });
+
+            this.colorBtns.push(btn);
+        });
+
+        this.eraserBtn = this.add.image(m.eraserBtnX, m.row1Y, 'eraserBtn')
+            .setDisplaySize(m.eraserBtnWidth, m.eraserBtnHeight)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(27);
+
+        this.eraserBtn.on('pointerdown', (p, lx, ly, ev) => {
+            ev.stopPropagation();
+            this.isEraser = true;
+            this.activeSticker = null;
+            this.isTrayOpen = false;
+            this.stickerTray.setVisible(false);
+            this.stickerBtnHighlight.setVisible(false);
+
+            this.colorHighlight.setVisible(false);
+            this.eraserHighlight.setVisible(true);
+            this.statusText.setText(this.getStationTitle(this.currentStation)).setColor('#ffffff');
+            this.updateCursorStyle();
+            this.playSound('eraserSelect');
+        });
+
+        this.clearBtn = this.add.image(m.clearBtnX, m.row1Y, 'clearBtn')
+            .setDisplaySize(m.clearBtnWidth, m.clearBtnHeight)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(27);
+
+        this.clearBtn.on('pointerdown', (p, lx, ly, ev) => {
+            ev.stopPropagation();
+            this.saveUndoState();
+            this.playSound('clearAllSfx');
+
+            this.activeDrips = this.activeDrips.filter(d => d.stationIndex !== this.currentStation);
+            const st = this.stations[this.currentStation];
+            st.rtBg.clear();
+            st.rtOver.clear();
+
+            this.flashStatus(ASSETS_CONFIG.text.clearWallStatus, '#ff0055', 900);
+        });
+
+        // ROW 2: Credits Button -> 4 Size Buttons (XS, S, M, L) -> 3 Icon Style Buttons (Soft, Hard, Spray)
+        this.creditsBtnBottom = this.add.image(m.creditsBtnX, m.row2Y, 'creditsBtn')
+            .setDisplaySize(m.creditsBtnWidth, m.creditsBtnHeight)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(27);
+        this.creditsBtnBottom.on('pointerdown', (p, lx, ly, ev) => { ev.stopPropagation(); this.openCredits(); });
+
+        this.sizeBtns = [];
+        BRUSH_SIZES.forEach((sz, idx) => {
+            const x = m.sizeStartX + idx * m.sizeSpacingX;
+            const y = m.row2Y;
+
+            const btn = this.add.image(x, y, sz.key)
+                .setDisplaySize(m.sizeBtnWidth, m.sizeBtnHeight)
+                .setInteractive({ useHandCursor: true })
+                .setDepth(27);
+
+            if (idx === this.selectedSizeIndex) {
+                this.sizeHighlight.setPosition(x, y);
+            }
+
+            btn.on('pointerdown', (p, lx, ly, ev) => {
+                ev.stopPropagation();
+                this.activeSticker = null;
+                this.stickerBtnHighlight.setVisible(false);
+                if (!this.isEraser) this.colorHighlight.setVisible(true);
+
+                this.selectedSizeIndex = idx;
+                this.sizeHighlight.setPosition(x, y);
+                this.updateCursorStyle();
+                this.playSound('sizeClick');
+            });
+
+            this.sizeBtns.push(btn);
+        });
+
+        this.styleBtns = [];
+        BRUSH_STYLES.forEach((st, idx) => {
+            const x = m.styleStartX + idx * m.styleSpacingX;
+            const y = m.row2Y;
+
+            const btn = this.add.image(x, y, st.key)
+                .setDisplaySize(m.styleBtnWidth, m.styleBtnHeight)
+                .setInteractive({ useHandCursor: true })
+                .setDepth(27);
+
+            if (idx === this.selectedStyleIndex) {
+                this.styleHighlight.setPosition(x, y);
+            }
+
+            btn.on('pointerdown', (p, lx, ly, ev) => {
+                ev.stopPropagation();
+                this.activeSticker = null;
+                this.stickerBtnHighlight.setVisible(false);
+                if (!this.isEraser) this.colorHighlight.setVisible(true);
+
+                this.selectedStyleIndex = idx;
+                this.styleHighlight.setPosition(x, y);
+                this.updateCursorStyle();
+                this.playSound('styleClick');
+            });
+
+            this.styleBtns.push(btn);
+        });
+    }
+
+    // ========================================================================
+    // INPUT LISTENERS
+    // ========================================================================
+    setupInputListeners() {
+        this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
+            if (this.isModalOpen) return;
+            if (this.isTrayOpen) {
+                const delta = Math.abs(deltaX) > Math.abs(deltaY) ? deltaX : deltaY;
+                this.scrollStickerTray(delta * 0.45);
+            } else if (pointer.y >= 32 && pointer.y <= 195) {
+                const zoomDir = deltaY < 0 ? 0.5 : -0.5;
+                this.changeZoom(zoomDir, pointer.x, pointer.y);
+            }
+        });
+
+        this.input.on('pointerdown', (pointer, currentlyOver) => {
+            if (this.isModalOpen || this.isPanning) return;
+
+            if (this.isTrayOpen) {
+                if (currentlyOver.length === 0) {
+                    this.toggleStickerTray();
+                }
+                return;
+            }
+
+            if (currentlyOver.length > 0 || pointer.y < 32 || pointer.y > 195) return;
+
+            if (pointer.rightButtonDown() || pointer.middleButtonDown()) {
+                this.isDraggingCanvas = true;
+                this.canvasDragStartX = pointer.x;
+                this.canvasDragStartY = pointer.y;
+                this.canvasStartOffsetX = this.panOffsetX;
+                this.canvasStartOffsetY = this.panOffsetY;
+                return;
+            }
+
+            if (this.activeSticker) {
+                this.stampStickerAt(pointer.x, pointer.y);
+                return;
+            }
+
+            this.saveUndoState();
+            this.isDrawing = true;
+            this.lastDrawX = pointer.x;
+            this.lastDrawY = pointer.y;
+
+            this.applyBrushAt(pointer.x, pointer.y, true);
+            this.startSpraySound();
+        });
+
+        this.input.on('pointermove', (pointer) => {
+            if (this.isDraggingTray && this.isTrayOpen) {
+                const dragDelta = this.trayDragStartX - pointer.x;
+                if (Math.abs(dragDelta) > 4) this.trayDragMoved = true;
+                this.trayScrollX = Phaser.Math.Clamp(this.trayDragStartScroll + dragDelta, 0, this.maxTrayScroll);
+                this.trayItemsContainer.x = this.trayBaseX - this.trayScrollX;
+                return;
+            }
+
+            if (this.isDraggingCanvas) {
+                this.panOffsetX = this.canvasStartOffsetX + (pointer.x - this.canvasDragStartX);
+                this.panOffsetY = this.canvasStartOffsetY + (pointer.y - this.canvasDragStartY);
+                this.clampPanOffsets();
+                this.applyWorldTransform();
+                return;
+            }
+
+            if (!this.isModalOpen && !this.isTrayOpen && pointer.y >= 32 && pointer.y <= 195) {
+                if (this.activeSticker) {
+                    this.stickerPreview.setVisible(true).setPosition(pointer.x, pointer.y);
+                    this.brushCursor.setVisible(false);
+                } else {
+                    this.brushCursor.setVisible(true).setPosition(pointer.x, pointer.y);
+                    this.stickerPreview.setVisible(false);
+                }
+            } else {
+                this.brushCursor.setVisible(false);
+                this.stickerPreview.setVisible(false);
+            }
+
+            if (!this.isDrawing || this.isModalOpen || this.isPanning || this.isTrayOpen) return;
+            if (pointer.y < 32 || pointer.y > 195) {
+                this.stopDrawing();
+                return;
+            }
+            this.applyBrushLine(this.lastDrawX, this.lastDrawY, pointer.x, pointer.y);
+            this.lastDrawX = pointer.x;
+            this.lastDrawY = pointer.y;
+        });
+
+        this.input.on('pointerup', () => {
+            this.isDraggingTray = false;
+            this.isDraggingCanvas = false;
+            this.stopDrawing();
+        });
+
+        this.input.on('pointerout', () => {
+            this.isDraggingTray = false;
+            this.isDraggingCanvas = false;
+            this.brushCursor.setVisible(false);
+            this.stickerPreview.setVisible(false);
+            this.stopDrawing();
+        });
+    }
+
+    // ========================================================================
+    // 2D-CANVAS TEXTURES & BRUSH STAMPING ENGINE
+    // ========================================================================
+    createBrushAndEraserTextures() {
+        SPRAY_COLORS.forEach((col, cIdx) => {
+            BRUSH_SIZES.forEach((sz, sIdx) => {
+                const r = sz.radius;
+
+                const softKey = `brush_soft_${cIdx}_${sIdx}`;
+                if (!this.textures.exists(softKey)) {
+                    const canvas = this.textures.createCanvas(softKey, r * 2, r * 2);
+                    const ctx = canvas.context;
+                    const grad = ctx.createRadialGradient(r, r, 0, r, r, r);
+                    grad.addColorStop(0, `rgba(${col.rgb}, 0.92)`);
+                    grad.addColorStop(0.55, `rgba(${col.rgb}, 0.5)`);
+                    grad.addColorStop(1, `rgba(${col.rgb}, 0)`);
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, 0, r * 2, r * 2);
+                    canvas.refresh();
+                }
+
+                const hardKey = `brush_hard_${cIdx}_${sIdx}`;
+                if (!this.textures.exists(hardKey)) {
+                    const canvas = this.textures.createCanvas(hardKey, r * 2, r * 2);
+                    const ctx = canvas.context;
+                    ctx.fillStyle = `rgba(${col.rgb}, 1)`;
+                    ctx.beginPath();
+                    ctx.arc(r, r, r, 0, Math.PI * 2);
+                    ctx.fill();
+                    canvas.refresh();
+                }
+
+                const sprayKey = `brush_spray_${cIdx}_${sIdx}`;
+                if (!this.textures.exists(sprayKey)) {
+                    const canvas = this.textures.createCanvas(sprayKey, r * 2, r * 2);
+                    const ctx = canvas.context;
+                    const grad = ctx.createRadialGradient(r, r, r * 0.25, r, r, r);
+                    grad.addColorStop(0, `rgba(${col.rgb}, 1)`);
+                    grad.addColorStop(0.65, `rgba(${col.rgb}, 0.65)`);
+                    grad.addColorStop(1, `rgba(${col.rgb}, 0)`);
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, 0, r * 2, r * 2);
+                    canvas.refresh();
+                }
+            });
+
+            const speckKey = `speck_${cIdx}`;
+            if (!this.textures.exists(speckKey)) {
+                const canvas = this.textures.createCanvas(speckKey, 4, 4);
+                const ctx = canvas.context;
+                ctx.fillStyle = `rgba(${col.rgb}, 0.85)`;
+                ctx.beginPath();
+                ctx.arc(2, 2, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+                canvas.refresh();
+            }
+
+            const dripKey = `drip_${cIdx}`;
+            if (!this.textures.exists(dripKey)) {
+                const canvas = this.textures.createCanvas(dripKey, 6, 6);
+                const ctx = canvas.context;
+                ctx.fillStyle = `rgba(${col.rgb}, 0.95)`;
+                ctx.beginPath();
+                ctx.arc(3, 3, 2.2, 0, Math.PI * 2);
+                ctx.fill();
+                canvas.refresh();
+            }
+        });
+
+        BRUSH_SIZES.forEach((sz, sIdx) => {
+            const r = sz.radius;
+
+            const eraseSoftKey = `eraser_soft_${sIdx}`;
+            if (!this.textures.exists(eraseSoftKey)) {
+                const canvas = this.textures.createCanvas(eraseSoftKey, r * 2, r * 2);
+                const ctx = canvas.context;
+                const grad = ctx.createRadialGradient(r, r, 0, r, r, r);
+                grad.addColorStop(0, 'rgba(255,255,255,0.92)');
+                grad.addColorStop(0.55, 'rgba(255,255,255,0.5)');
+                grad.addColorStop(1, 'rgba(255,255,255,0)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, r * 2, r * 2);
+                canvas.refresh();
+            }
+
+            const eraseHardKey = `eraser_hard_${sIdx}`;
+            if (!this.textures.exists(eraseHardKey)) {
+                const canvas = this.textures.createCanvas(eraseHardKey, r * 2, r * 2);
+                const ctx = canvas.context;
+                ctx.fillStyle = 'rgba(255,255,255,1)';
+                ctx.beginPath();
+                ctx.arc(r, r, r, 0, Math.PI * 2);
+                ctx.fill();
+                canvas.refresh();
+            }
+
+            const eraseSprayKey = `eraser_spray_${sIdx}`;
+            if (!this.textures.exists(eraseSprayKey)) {
+                const canvas = this.textures.createCanvas(eraseSprayKey, r * 2, r * 2);
+                const ctx = canvas.context;
+                const grad = ctx.createRadialGradient(r, r, r * 0.25, r, r, r);
+                grad.addColorStop(0, 'rgba(255,255,255,1)');
+                grad.addColorStop(0.65, 'rgba(255,255,255,0.65)');
+                grad.addColorStop(1, 'rgba(255,255,255,0)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, r * 2, r * 2);
+                canvas.refresh();
+            }
+        });
+
+        if (!this.textures.exists('eraser_speck')) {
+            const canvas = this.textures.createCanvas('eraser_speck', 4, 4);
+            const ctx = canvas.context;
+            ctx.fillStyle = 'rgba(255,255,255,0.85)';
+            ctx.beginPath();
+            ctx.arc(2, 2, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+            canvas.refresh();
+        }
+    }
+
+    applyBrushAt(screenX, screenY, isInitialClick = false) {
+        const st = this.stations[this.currentStation];
+        const cfg = st.cfg;
+
+        const worldX = (screenX - this.worldContainer.x) / this.zoomLevel;
+        const worldY = (screenY - this.worldContainer.y) / this.zoomLevel;
+
+        // Determine whether we are drawing on Layer 2 (Target PNG) or Layer 1 (Full 300x250 Station Background)
+        const activeLayer = this.isTargetPngVisible ? this.currentLayer : 1;
+        const targetRt = activeLayer === 2 ? st.rtOver : st.rtBg;
+        const maxW = activeLayer === 2 ? cfg.width : st.bgW;
+        const maxH = activeLayer === 2 ? cfg.height : st.bgH;
+
+        const localX = activeLayer === 2
+            ? worldX - (st.centerX - cfg.width / 2)
+            : worldX - st.bgLeftX;
+        const localY = activeLayer === 2
+            ? worldY - (st.centerY - cfg.height / 2)
+            : worldY;
+
+        if (localX < -20 || localX > maxW + 20 || localY < -20 || localY > maxH + 20) return;
+
+        // Rainbow Can color cycling
+        if (this.isRainbowMode && !this.isEraser) {
+            this.rainbowStepCounter++;
+            if (this.rainbowStepCounter % 5 === 0) {
+                this.selectedColorIndex = (this.selectedColorIndex + 1) % SPRAY_COLORS.length;
+                const m = ASSETS_CONFIG.uiMetrics;
+                const btnX = m.colorStartX + this.selectedColorIndex * m.colorSpacingX;
+                this.colorHighlight.setPosition(btnX, m.row1Y);
+                this.updateCursorStyle();
+            }
+        }
+
+        const radius = BRUSH_SIZES[this.selectedSizeIndex].radius;
+        const styleId = BRUSH_STYLES[this.selectedStyleIndex].id;
+
+        if (this.isEraser) {
+            const eraseKey = `eraser_${styleId}_${this.selectedSizeIndex}`;
+            targetRt.erase(eraseKey, localX - radius, localY - radius);
+
+            if (styleId === 'spray') {
+                const speckCount = this.selectedSizeIndex + 2;
+                for (let i = 0; i < speckCount; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = radius * (0.55 + Math.random() * 0.85);
+                    const sx = localX + Math.cos(angle) * dist;
+                    const sy = localY + Math.sin(angle) * dist;
+                    targetRt.erase('eraser_speck', sx - 2, sy - 2);
+                }
+            }
+        } else {
+            const cIdx = this.selectedColorIndex;
+
+            // Main Brush Stamp
+            const brushKey = `brush_${styleId}_${cIdx}_${this.selectedSizeIndex}`;
+            targetRt.draw(brushKey, localX - radius, localY - radius);
+
+            const speckKey = `speck_${cIdx}`;
+            if (styleId === 'spray') {
+                const speckCount = this.selectedSizeIndex + 2;
+                for (let i = 0; i < speckCount; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = radius * (0.55 + Math.random() * 0.85);
+                    const sx = localX + Math.cos(angle) * dist;
+                    const sy = localY + Math.sin(angle) * dist;
+                    targetRt.draw(speckKey, sx - 2, sy - 2);
+                }
+            }
+
+            // Optional Splatter Nozzle Burst
+            if (this.isSplatMode && (isInitialClick || Math.random() < 0.28)) {
+                const burstCount = ASSETS_CONFIG.gameplay.splatBurstCount || 8;
+                for (let i = 0; i < burstCount; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = radius * (0.8 + Math.random() * 2.2);
+                    const sx = localX + Math.cos(angle) * dist;
+                    const sy = localY + Math.sin(angle) * dist;
+                    if (Math.random() < 0.35) {
+                        const miniKey = `brush_hard_${cIdx}_1`;
+                        targetRt.draw(miniKey, sx - 4, sy - 4);
+                    } else {
+                        targetRt.draw(speckKey, sx - 2, sy - 2);
+                    }
+                }
+            }
+
+            // Optional Live Running Paint Drips
+            const gCfg = ASSETS_CONFIG.gameplay;
+            if (this.isDripMode && Math.random() < gCfg.dripSpawnChance && this.activeDrips.length < 18) {
+                this.activeDrips.push({
+                    stationIndex: this.currentStation,
+                    layer: activeLayer,
+                    x: localX + Phaser.Math.Between(-radius * 0.4, radius * 0.4),
+                    y: localY + radius * 0.3,
+                    remaining: Phaser.Math.Between(gCfg.dripMinLength, gCfg.dripMaxLength),
+                    colorIndex: cIdx
+                });
+            }
+        }
+
+        // Enforce Solid Binary PNG Mask on Layer 2 (Target PNG)
+        this.applyLayerMask(st, activeLayer);
+    }
+
+    applyBrushLine(x0, y0, x1, y1) {
+        const dist = Phaser.Math.Distance.Between(x0, y0, x1, y1);
+        const radius = BRUSH_SIZES[this.selectedSizeIndex].radius;
+        const stepSize = radius <= 2 ? 0.8 : (BRUSH_STYLES[this.selectedStyleIndex].id === 'hard' ? 1.5 : 2.5);
+        const steps = Math.max(1, Math.ceil(dist / stepSize));
+        for (let i = 1; i <= steps; i++) {
+            const t = i / steps;
+            const ix = Phaser.Math.Linear(x0, x1, t);
+            const iy = Phaser.Math.Linear(y0, y1, t);
+            this.applyBrushAt(ix, iy, false);
+        }
+    }
+
+    update(time, delta) {
+        if (this.activeDrips.length === 0) return;
+
+        const speed = ASSETS_CONFIG.gameplay.dripSpeed || 28;
+        const stepY = (speed * delta) / 1000;
+        const touchedStations = new Set();
+
+        for (let i = this.activeDrips.length - 1; i >= 0; i--) {
+            const d = this.activeDrips[i];
+            const st = this.stations[d.stationIndex];
+            const maxH = d.layer === 2 ? st.cfg.height : st.bgH;
+            d.y += stepY;
+            d.remaining -= stepY;
+
+            if (d.remaining <= 0 || d.y >= maxH - 2) {
+                this.activeDrips.splice(i, 1);
+                continue;
+            }
+
+            const targetRt = d.layer === 2 ? st.rtOver : st.rtBg;
+            targetRt.draw(`drip_${d.colorIndex}`, d.x - 3, d.y - 3);
+            touchedStations.add(`${d.stationIndex}_${d.layer}`);
+        }
+
+        touchedStations.forEach(token => {
+            const [sIdx, layerNum] = token.split('_').map(Number);
+            this.applyLayerMask(this.stations[sIdx], layerNum);
+        });
+    }
+
+    stopDrawing() {
+        if (!this.isDrawing) return;
+        this.isDrawing = false;
+        this.stopSpraySound();
+    }
+
+    // ========================================================================
+    // PANNING & SNAPSHOTS (EXPORTS FULL 300x250 SCENE OR 220x155 TRANSPARENT PNG)
+    // ========================================================================
+    panStation(dir) {
+        if (this.isPanning || this.isModalOpen) return;
+        const maxIndex = ASSETS_CONFIG.stations.length - 1;
+        const next = Phaser.Math.Clamp(this.currentStation + dir, 0, maxIndex);
+        if (next === this.currentStation) return;
+
+        this.stopDrawing();
+
+        if (this.zoomLevel !== 1.0 || this.panOffsetX !== 0 || this.panOffsetY !== 0) {
+            this.zoomLevel = 1.0;
+            this.panOffsetX = 0;
+            this.panOffsetY = 0;
+            this.applyWorldTransform();
+            this.updateCursorStyle();
+        }
+
+        this.currentStation = next;
+        this.isPanning = true;
+        this.playSound('slideWhoosh');
+
+        const targetWorldX = -this.currentStation * 300;
+
+        this.tweens.add({
+            targets: this.worldContainer,
+            x: targetWorldX,
+            y: 0,
+            duration: 380,
+            ease: 'Cubic.easeOut',
+            onComplete: () => {
+                this.isPanning = false;
+                this.statusText.setText(this.getStationTitle(this.currentStation)).setColor('#ffffff');
+                this.updateArrowVisibility();
+            }
+        });
+    }
+
+    updateArrowVisibility() {
+        const maxIndex = ASSETS_CONFIG.stations.length - 1;
+        this.leftArrow.setAlpha(this.currentStation > 0 ? 1 : 0.25);
+        this.rightArrow.setAlpha(this.currentStation < maxIndex ? 1 : 0.25);
+    }
+
+    takeSnapshot() {
+        this.playSound('shutterClick');
+        this.flashStatus(ASSETS_CONFIG.text.snapshotSavedStatus, '#00ffcc', 1200);
+
+        const st = this.stations[this.currentStation];
+        const w = st.cfg.width;
+        const h = st.cfg.height;
+        const bgW = st.bgW;
+        const bgH = st.bgH;
+
+        try {
+            const exportCanvas = document.createElement('canvas');
+            const ctx = exportCanvas.getContext('2d');
+
+            const bgSource = st.bgSprite.texture.getSourceImage();
+            const paintBgSource = st.rtBg.texture.getSourceImage();
+            const baseSource = st.baseSprite.texture.getSourceImage();
+            const paintOverSource = st.rtOver.texture.getSourceImage();
+            const maskSource = st.maskCanvas || baseSource;
+
+            if (this.isTransparentBg && this.isTargetPngVisible) {
+                // Export ONLY the 220x155 Target PNG and its masked top-layer paint with a 100% transparent background
+                exportCanvas.width = w;
+                exportCanvas.height = h;
+                ctx.drawImage(baseSource, 0, 0, w, h);
+                ctx.drawImage(paintOverSource, 0, 0, w, h);
+                ctx.globalCompositeOperation = 'destination-in';
+                ctx.drawImage(maskSource, 0, 0, w, h);
+            } else {
+                // Export the full 300x250 Station Scene (Station Background + BG Paint + Target PNG + Target PNG Paint)
+                exportCanvas.width = bgW;
+                exportCanvas.height = bgH;
+
+                if (!this.isTransparentBg && bgSource) {
+                    ctx.drawImage(bgSource, 0, 0, bgW, bgH);
+                }
+                if (!this.isTransparentBg && paintBgSource) {
+                    ctx.drawImage(paintBgSource, 0, 0, bgW, bgH);
+                }
+                if (this.isTargetPngVisible) {
+                    const offsetX = 150 - w / 2;
+                    const offsetY = 114 - h / 2;
+                    ctx.drawImage(baseSource, offsetX, offsetY, w, h);
+                    ctx.drawImage(paintOverSource, offsetX, offsetY, w, h);
+                }
+            }
+
+            const dataUrl = exportCanvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = `grimy-tag-spot-${this.currentStation + 1}.png`;
+            link.href = dataUrl;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (err) {
+            console.warn('Snapshot download requires running on a web server or localhost.', err);
+        }
+
+        this.cameras.main.flash(140, 255, 255, 255);
+    }
+
+    // ========================================================================
+    // CREDITS MODAL
+    // ========================================================================
+    buildCreditsModal() {
+        this.creditsModal = this.add.container(0, 0).setDepth(100).setVisible(false);
+
+        const overlay = this.add.rectangle(150, 125, 300, 250, 0x000000, 0.88).setInteractive();
+        const panel = this.add.image(150, 125, 'creditsBg').setDisplaySize(260, 200);
+        const modalLogo = this.add.image(150, 70, 'creditsLogo').setDisplaySize(140, 50);
+
+        const closeBtn = this.add.image(265, 40, 'closeBtn')
+            .setDisplaySize(24, 24)
+            .setInteractive({ useHandCursor: true });
+
+        closeBtn.on('pointerdown', (p, x, y, ev) => {
+            ev.stopPropagation();
+            this.closeCredits();
+        });
+
+        this.creditsModal.add([overlay, panel, modalLogo, closeBtn]);
+
+        let startY = 120;
+        ASSETS_CONFIG.credits.forEach(lineText => {
+            let txt = this.add.text(150, startY, lineText, {
+                fontFamily: ASSETS_CONFIG.fontFamily,
+                fontSize: '11px',
+                color: '#cccccc',
+                fontStyle: 'bold',
+                align: 'center'
+            }).setOrigin(0.5);
+            this.creditsModal.add(txt);
+            startY += 24;
+        });
+    }
+
+    openCredits() {
+        this.stopDrawing();
+        this.isModalOpen = true;
+        this.creditsModal.setVisible(true).setAlpha(0);
+        this.tweens.add({ targets: this.creditsModal, alpha: 1, duration: 150 });
+    }
+
+    closeCredits() {
+        this.isModalOpen = false;
+        this.creditsModal.setVisible(false);
+    }
+
+    // ========================================================================
+    // AUDIO & SYNTH FALLBACKS
+    // ========================================================================
+    toggleMute() {
+        this.isMuted = !this.isMuted;
+        localStorage.setItem('grimy_tag_muted', this.isMuted);
+        if (this.menuMuteBtn) {
+            this.menuMuteBtn.setTexture(this.isMuted ? 'muteOn' : 'muteOff').setDisplaySize(20, 20);
+        }
+        if (this.isMuted) {
+            this.stopSpraySound();
+        } else {
+            this.playSound('sizeClick');
+        }
+    }
+
+    playSound(key) {
+        if (this.isMuted) return;
+        const audio = LOADED_HTML_AUDIO[key];
+        if (audio) {
+            audio.currentTime = 0;
+            audio.play().catch(() => {});
+        } else {
+            this.playSynthSfx(key);
+        }
+    }
+
+    startSpraySound() {
+        if (this.isMuted) return;
+        const audio = LOADED_HTML_AUDIO['sprayLoop'];
+        if (audio) {
+            audio.loop = true;
+            audio.currentTime = 0;
+            audio.play().catch(() => {});
+            return;
+        }
+        try {
+            const ctx = this.sound.context;
+            if (!ctx || this.sprayNoiseNode) return;
+            const bufferSize = ctx.sampleRate * 0.5;
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+            noise.loop = true;
+
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.value = 3200;
+
+            const gain = ctx.createGain();
+            gain.gain.value = 0.06;
+
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(ctx.destination);
+            noise.start();
+            this.sprayNoiseNode = noise;
+        } catch (e) {}
+    }
+
+    stopSpraySound() {
+        const audio = LOADED_HTML_AUDIO['sprayLoop'];
+        if (audio) {
+            audio.pause();
+            audio.currentTime = 0;
+        }
+        if (this.sprayNoiseNode) {
+            try { this.sprayNoiseNode.stop(); } catch (e) {}
+            this.sprayNoiseNode = null;
+        }
+    }
+
+    playSynthSfx(key) {
+        try {
+            const ctx = this.sound.context;
+            if (!ctx) return;
+            const now = ctx.currentTime;
+
+            if (key === 'canShake') {
+                [0, 0.07].forEach(offset => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(900, now + offset);
+                    osc.frequency.exponentialRampToValueAtTime(280, now + offset + 0.045);
+                    gain.gain.setValueAtTime(0.14, now + offset);
+                    gain.gain.linearRampToValueAtTime(0.01, now + offset + 0.045);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now + offset);
+                    osc.stop(now + offset + 0.045);
+                });
+            } else if (key === 'uploadErrorSfx') {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(160, now);
+                osc.frequency.linearRampToValueAtTime(85, now + 0.22);
+                gain.gain.setValueAtTime(0.18, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.22);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.22);
+            } else if (key === 'uploadSuccessSfx' || key === 'uploadBgSuccessSfx') {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(480, now);
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.16);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.16);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.16);
+            } else if (key === 'zoomInSfx' || key === 'zoomOutSfx' || key === 'layersSfx' || key === 'dripToggleSfx' || key === 'splatToggleSfx' || key === 'rainbowToggleSfx' || key === 'transToggleSfx' || key === 'targetToggleSfx' || key === 'menuOpenSfx' || key === 'menuCloseSfx') {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                const f = key === 'zoomInSfx' ? 440 : (key === 'zoomOutSfx' ? 760 : 580);
+                osc.frequency.setValueAtTime(f, now);
+                osc.frequency.exponentialRampToValueAtTime(f * 1.45, now + 0.065);
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.065);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.065);
+            } else if (key === 'undoSfx') {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(520, now);
+                osc.frequency.exponentialRampToValueAtTime(220, now + 0.14);
+                gain.gain.setValueAtTime(0.14, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.14);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.14);
+            } else if (key === 'stickerSlapSfx') {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(190, now);
+                osc.frequency.exponentialRampToValueAtTime(55, now + 0.09);
+                gain.gain.setValueAtTime(0.18, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.09);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.09);
+            } else {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(640, now);
+                osc.frequency.exponentialRampToValueAtTime(900, now + 0.05);
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.05);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.05);
+            }
+        } catch (e) {}
+    }
+
+    // ========================================================================
+    // PLACEHOLDER GRAPHICS
+    // ========================================================================
+    createFallbackTextures() {
+        const g = this.make.graphics({ x: 0, y: 0, add: false });
+        const m = ASSETS_CONFIG.uiMetrics;
+        const t = ASSETS_CONFIG.text;
+        const font = ASSETS_CONFIG.fontFamily;
+        const sz = m.topIconSize;
+        const bSz = m.sideBtnSize;
+
+        // Per-station 300x250 backgrounds:
+        // Uses stCfg.bgKey if loaded, or copies images.defaultBackground if loaded, or generates a brick wall
+        const hasDefaultBgImg = this.textures.exists('defaultBackground');
+        const defaultBgSource = hasDefaultBgImg ? this.textures.get('defaultBackground').getSourceImage() : null;
+        const wallBaseColors = [0x141416, 0x161418, 0x121616, 0x181512, 0x141619];
+
+        ASSETS_CONFIG.stations.forEach((stCfg, idx) => {
+            const bgW = stCfg.bgWidth || 300;
+            const bgH = stCfg.bgHeight || 250;
+            if (!this.textures.exists(stCfg.bgKey)) {
+                if (defaultBgSource) {
+                    const canvas = this.textures.createCanvas(stCfg.bgKey, bgW, bgH);
+                    canvas.context.drawImage(defaultBgSource, 0, 0, bgW, bgH);
+                    canvas.refresh();
+                } else {
+                    g.clear();
+                    g.fillStyle(wallBaseColors[idx % wallBaseColors.length], 1);
+                    g.fillRect(0, 0, bgW, bgH);
+                    g.lineStyle(1, 0x222226, 1);
+                    for (let y = 32; y < 200; y += 16) {
+                        g.lineBetween(0, y, bgW, y);
+                        const offset = (y / 16) % 2 === 0 ? 0 : 16;
+                        for (let x = offset; x < bgW; x += 32) {
+                            g.lineBetween(x, y, x, y + 16);
+                        }
+                    }
+                    g.generateTexture(stCfg.bgKey, bgW, bgH);
+                }
+            }
+        });
+
+        const fallbackColors = [0xdddddd, 0x2b4c3f, 0xe8e4d9, 0x3a2e4c, 0x4c362b];
+        ASSETS_CONFIG.stations.forEach((stCfg, idx) => {
+            if (!this.textures.exists(stCfg.key)) {
+                g.clear();
+                const fillCol = fallbackColors[idx % fallbackColors.length];
+                g.fillStyle(fillCol, 1);
+                g.lineStyle(4, 0x555555, 1);
+                g.fillRoundedRect(18, 16, stCfg.width - 36, stCfg.height - 32, 10);
+                g.strokeRoundedRect(18, 16, stCfg.width - 36, stCfg.height - 32, 10);
+                g.generateTexture(stCfg.key, stCfg.width, stCfg.height);
+            }
+        });
+
+        const stickerPalette = ['#ff0055', '#00ffcc', '#ffdd00', '#9922ff', '#ff7700', '#00dd44'];
+        ASSETS_CONFIG.stickers.forEach((sk, idx) => {
+            if (!this.textures.exists(sk.key)) {
+                const canvas = this.textures.createCanvas(sk.key, sk.width, sk.height);
+                const ctx = canvas.context;
+                ctx.fillStyle = stickerPalette[idx % stickerPalette.length];
+                ctx.fillRect(2, 2, sk.width - 4, sk.height - 4);
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = '#ffffff';
+                ctx.strokeRect(2, 2, sk.width - 4, sk.height - 4);
+                ctx.fillStyle = '#080808';
+                ctx.font = `900 9px ${font}`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`TAG ${idx + 1}`, sk.width / 2, sk.height / 2);
+                canvas.refresh();
+            }
+        });
+
+        const makeBoxBtnTex = (key, width, height, label, borderColor, textColor = borderColor, fontSize = 8) => {
+            if (this.textures.exists(key)) return;
+            const canvas = this.textures.createCanvas(key, width, height);
+            const ctx = canvas.context;
+            ctx.fillStyle = '#222222';
+            ctx.fillRect(0, 0, width, height);
+            ctx.strokeStyle = borderColor;
+            ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
+            ctx.fillStyle = textColor;
+            ctx.font = `900 ${fontSize}px ${font}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, width / 2, height / 2 + 0.5);
+            canvas.refresh();
+        };
+
+        // Side Column Buttons
+        makeBoxBtnTex('splatBtn', bSz, bSz, t.splatLabel, '#ff7700', '#ff7700', 7);
+        makeBoxBtnTex('stickerBtn', bSz, bSz, t.stickerLabel, '#ff33aa', '#ff33aa', 10);
+        makeBoxBtnTex('zoomOutBtn', bSz, bSz, t.zoomOutLabel, '#00ffcc', '#00ffcc', 12);
+        makeBoxBtnTex('rainbowBtn', bSz, bSz, t.rainbowLabel, '#ff33aa', '#ffdd00', 7);
+
+        makeBoxBtnTex('layersBtn', bSz, bSz, t.layersLabel, '#00ffcc', '#00ffcc', 7);
+        makeBoxBtnTex('undoBtn', bSz, bSz, t.undoLabel, '#ffcc00', '#ffcc00', 11);
+        makeBoxBtnTex('zoomInBtn', bSz, bSz, t.zoomInLabel, '#00ffcc', '#00ffcc', 12);
+        makeBoxBtnTex('dripBtn', bSz, bSz, t.dripLabel, '#00dd44', '#00dd44', 7);
+
+        // Hamburger Menu Button & Menu Action Buttons
+        makeBoxBtnTex('menuBtn', sz, sz, t.menuBtnLabel, '#00ffcc', '#ffffff', 12);
+        makeBoxBtnTex('transBgOn', m.toggleBtnWidth, m.toggleBtnHeight, t.toggleOnLabel, '#00ffcc', '#00ffcc', 9);
+        makeBoxBtnTex('transBgOff', m.toggleBtnWidth, m.toggleBtnHeight, t.toggleOffLabel, '#ff0055', '#ff99aa', 9);
+        makeBoxBtnTex('targetPngOn', m.toggleBtnWidth, m.toggleBtnHeight, t.toggleOnLabel, '#00ffcc', '#00ffcc', 9);
+        makeBoxBtnTex('targetPngOff', m.toggleBtnWidth, m.toggleBtnHeight, t.toggleOffLabel, '#ff0055', '#ff99aa', 9);
+        makeBoxBtnTex('uploadBtn', m.uploadBtnWidth, m.uploadBtnHeight, t.uploadBtnLabel, '#ffdd00', '#ffdd00', 8);
+        makeBoxBtnTex('uploadBgBtn', m.uploadBtnWidth, m.uploadBtnHeight, t.uploadBgBtnLabel, '#00ffcc', '#00ffcc', 8);
+
+        // Fallback for "OPTIONS & TOOLS" Menu Title Image (160x22)
+        if (!this.textures.exists('menuTitleImg')) {
+            const canvas = this.textures.createCanvas('menuTitleImg', m.menuTitleWidth, m.menuTitleHeight);
+            const ctx = canvas.context;
+            ctx.clearRect(0, 0, m.menuTitleWidth, m.menuTitleHeight);
+            ctx.fillStyle = '#00ffcc';
+            ctx.font = `900 13px ${font}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(t.menuTitle, m.menuTitleWidth / 2, m.menuTitleHeight / 2);
+            canvas.refresh();
+        }
+
+        if (!this.textures.exists('menuBg')) {
+            g.clear();
+            g.fillStyle(0x111115, 1);
+            g.lineStyle(2, 0x00ffcc, 1);
+            g.fillRoundedRect(0, 0, m.menuModalWidth, m.menuModalHeight, 8);
+            g.strokeRoundedRect(0, 0, m.menuModalWidth, m.menuModalHeight, 8);
+            g.generateTexture('menuBg', m.menuModalWidth, m.menuModalHeight);
+        }
+
+        if (!this.textures.exists('stickerTrayBg')) {
+            g.clear();
+            g.fillStyle(0x0c0c10, 0.96);
+            g.lineStyle(2, 0xff33aa, 1);
+            g.fillRoundedRect(0, 0, m.trayWidth, m.trayHeight, 6);
+            g.strokeRoundedRect(0, 0, m.trayWidth, m.trayHeight, 6);
+            g.generateTexture('stickerTrayBg', m.trayWidth, m.trayHeight);
+        }
+
+        SPRAY_COLORS.forEach((col) => {
+            if (!this.textures.exists(col.key)) {
+                g.clear();
+                g.fillStyle(col.hex, 1);
+                g.lineStyle(1.5, 0x444444, 1);
+                g.fillRoundedRect(1, 1, m.colorBtnWidth - 2, m.colorBtnHeight - 2, 4);
+                g.strokeRoundedRect(1, 1, m.colorBtnWidth - 2, m.colorBtnHeight - 2, 4);
+                g.generateTexture(col.key, m.colorBtnWidth, m.colorBtnHeight);
+            }
+        });
+
+        // 4 Brush Size Icon Fallbacks (XS, S, M, L)
+        const dotRadii = [1.2, 2.3, 3.8, 5.5];
+        BRUSH_SIZES.forEach((szItem, idx) => {
+            if (!this.textures.exists(szItem.key)) {
+                g.clear();
+                g.fillStyle(0x1f1f1f, 1);
+                g.lineStyle(1, 0x555555, 1);
+                g.fillRoundedRect(0, 0, m.sizeBtnWidth, m.sizeBtnHeight, 3);
+                g.strokeRoundedRect(0, 0, m.sizeBtnWidth, m.sizeBtnHeight, 3);
+                g.fillStyle(0xffffff, 1);
+                g.fillCircle(m.sizeBtnWidth / 2, m.sizeBtnHeight / 2, dotRadii[idx] || 3);
+                g.generateTexture(szItem.key, m.sizeBtnWidth, m.sizeBtnHeight);
+            }
+        });
+
+        // 3 Compact Visual Icon Fallbacks for Soft, Hard, and Spray Styles (22x16)
+        BRUSH_STYLES.forEach((st) => {
+            if (!this.textures.exists(st.key)) {
+                const w = m.styleBtnWidth;
+                const h = m.styleBtnHeight;
+                const cx = w / 2;
+                const cy = h / 2;
+                const canvas = this.textures.createCanvas(st.key, w, h);
+                const ctx = canvas.context;
+
+                ctx.fillStyle = '#1f1f1f';
+                ctx.fillRect(0, 0, w, h);
+                ctx.strokeStyle = '#555555';
+                ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
+
+                if (st.id === 'soft') {
+                    const grad = ctx.createRadialGradient(cx, cy, 0.5, cx, cy, 6.5);
+                    grad.addColorStop(0, 'rgba(255, 255, 204, 1)');
+                    grad.addColorStop(0.5, 'rgba(0, 255, 204, 0.55)');
+                    grad.addColorStop(1, 'rgba(0, 255, 204, 0)');
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, 6.5, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (st.id === 'hard') {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, 4.5, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    ctx.fillStyle = '#00ffcc';
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    const dots = [
+                        [-5, -3], [5, -3], [-6, 2], [6, 2],
+                        [-3, 4], [3, 4], [0, -5], [-4, 0], [4, 0]
+                    ];
+                    ctx.fillStyle = '#ffffff';
+                    dots.forEach(([dx, dy]) => {
+                        ctx.fillRect(cx + dx - 0.5, cy + dy - 0.5, 1.3, 1.3);
+                    });
+                }
+                canvas.refresh();
+            }
+        });
+
+        makeBoxBtnTex('eraserBtn', m.eraserBtnWidth, m.eraserBtnHeight, t.eraserLabel, '#ff99aa', '#ff99aa', 8);
+        makeBoxBtnTex('clearBtn', m.clearBtnWidth, m.clearBtnHeight, t.clearLabel, '#ff0055', '#ff0055', 8);
+
+        if (!this.textures.exists('topBarBg')) {
+            g.clear();
+            g.fillStyle(0x050505, 0.94);
+            g.fillRect(0, 0, 300, 32);
+            g.lineStyle(1, 0x2a2a2a, 1);
+            g.lineBetween(0, 31, 300, 31);
+            g.generateTexture('topBarBg', 300, 32);
+        }
+
+        if (!this.textures.exists('bottomBarBg')) {
+            g.clear();
+            g.fillStyle(0x080808, 0.96);
+            g.fillRect(0, 0, 300, 54);
+            g.lineStyle(1, 0x2a2a2a, 1);
+            g.lineBetween(0, 0, 300, 0);
+            g.generateTexture('bottomBarBg', 300, 54);
+        }
+
+        if (!this.textures.exists('arrowLeft')) {
+            g.clear();
+            g.fillStyle(0x111111, 0.85);
+            g.lineStyle(1.5, 0x00ffcc, 1);
+            g.fillRoundedRect(0, 0, m.arrowWidth, m.arrowHeight, 4);
+            g.strokeRoundedRect(0, 0, m.arrowWidth, m.arrowHeight, 4);
+            g.fillStyle(0x00ffcc, 1);
+            g.fillTriangle(15, 10, 15, m.arrowHeight - 10, 5, m.arrowHeight / 2);
+            g.generateTexture('arrowLeft', m.arrowWidth, m.arrowHeight);
+        }
+
+        if (!this.textures.exists('arrowRight')) {
+            g.clear();
+            g.fillStyle(0x111111, 0.85);
+            g.lineStyle(1.5, 0x00ffcc, 1);
+            g.fillRoundedRect(0, 0, m.arrowWidth, m.arrowHeight, 4);
+            g.strokeRoundedRect(0, 0, m.arrowWidth, m.arrowHeight, 4);
+            g.fillStyle(0x00ffcc, 1);
+            g.fillTriangle(5, 10, 5, m.arrowHeight - 10, 15, m.arrowHeight / 2);
+            g.generateTexture('arrowRight', m.arrowWidth, m.arrowHeight);
+        }
+
+        if (!this.textures.exists('camIcon')) {
+            g.clear();
+            g.fillStyle(0x222222, 1);
+            g.lineStyle(1.5, 0xffffff, 1);
+            g.fillRoundedRect(0, 0, sz, sz, 4);
+            g.strokeRoundedRect(0, 0, sz, sz, 4);
+            g.strokeCircle(sz / 2, sz / 2 + 1, 4);
+            g.fillRect(sz / 2 - 3, 3, 6, 2);
+            g.generateTexture('camIcon', sz, sz);
+        }
+
+        if (!this.textures.exists('creditsBg')) {
+            g.clear();
+            g.fillStyle(0x111111, 1);
+            g.lineStyle(2, 0x333333, 1);
+            g.fillRoundedRect(0, 0, 260, 200, 8);
+            g.strokeRoundedRect(0, 0, 260, 200, 8);
+            g.generateTexture('creditsBg', 260, 200);
+        }
+
+        if (!this.textures.exists('closeBtn')) {
+            g.clear();
+            g.fillStyle(0xff0055, 1);
+            g.fillCircle(12, 12, 12);
+            g.lineStyle(2, 0xffffff, 1);
+            g.lineBetween(8, 8, 16, 16);
+            g.lineBetween(16, 8, 8, 16);
+            g.generateTexture('closeBtn', 24, 24);
+        }
+
+        if (!this.textures.exists('logo')) {
+            g.clear();
+            g.fillStyle(0xff0055, 1);
+            g.fillRoundedRect(0, 0, 50, 16, 4);
+            g.generateTexture('logo', 50, 16);
+        }
+
+        if (!this.textures.exists('creditsLogo')) {
+            g.clear();
+            g.fillStyle(0xff0055, 1);
+            g.fillRoundedRect(0, 0, 140, 50, 8);
+            g.generateTexture('creditsLogo', 140, 50);
+        }
+
+        if (!this.textures.exists('creditsBtn')) {
+            g.clear();
+            g.fillStyle(0x333333, 1);
+            g.lineStyle(1, 0x00ffcc, 1);
+            g.fillRoundedRect(0, 0, 44, 16, 4);
+            g.strokeRoundedRect(0, 0, 44, 16, 4);
+            g.generateTexture('creditsBtn', 44, 16);
+        }
+
+        if (!this.textures.exists('muteOff')) {
+            g.clear();
+            g.fillStyle(0x222222, 1);
+            g.lineStyle(1.5, 0x00ffcc, 1);
+            g.fillRoundedRect(0, 0, 20, 20, 4);
+            g.strokeRoundedRect(0, 0, 20, 20, 4);
+            g.fillStyle(0x00ffcc, 1);
+            g.fillTriangle(4, 10, 11, 4, 11, 16);
+            g.lineBetween(14, 6, 16, 14);
+            g.generateTexture('muteOff', 20, 20);
+        }
+
+        if (!this.textures.exists('muteOn')) {
+            g.clear();
+            g.fillStyle(0x222222, 1);
+            g.lineStyle(1.5, 0xff0055, 1);
+            g.fillRoundedRect(0, 0, 20, 20, 4);
+            g.strokeRoundedRect(0, 0, 20, 20, 4);
+            g.fillStyle(0x777777, 1);
+            g.fillTriangle(4, 10, 11, 4, 11, 16);
+            g.lineStyle(2, 0xff0055, 1);
+            g.lineBetween(13, 6, 18, 14);
+            g.lineBetween(18, 6, 13, 14);
+            g.generateTexture('muteOn', 20, 20);
+        }
+
+        g.destroy();
+    }
+}
+
+// ============================================================================
+// 4. BOOTSTRAP GAME
+// ============================================================================
+preloadLocalAssets(() => {
+    const config = {
+        type: Phaser.CANVAS,
+        width: 300,
+        height: 250,
+        parent: 'game-container',
+        backgroundColor: '#080808',
+        preserveDrawingBuffer: true,
+        scene: [GraffitiGame]
+    };
+    new Phaser.Game(config);
+});
+</script>
+
+</body>
+</html>
