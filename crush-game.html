@@ -1,0 +1,1703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sketchy Stomp</title>
+    <!-- Google Font: Raleway (Regular, Bold, Black) -->
+    <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+            font-family: 'Raleway', sans-serif;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            background-color: transparent;
+            font-family: 'Raleway', sans-serif;
+            overflow: hidden;
+        }
+        #game-container {
+            width: 300px;
+            height: 250px;
+            position: relative;
+            border: 2px solid #000000;
+            box-sizing: content-box;
+            transition: border-color 0.3s ease;
+            touch-action: none;
+        }
+        #game-container:hover {
+            border-color: #000000;
+        }
+        #game-container canvas {
+            display: block;
+            touch-action: none;
+        }
+        .font-preload {
+            font-family: 'Raleway', sans-serif;
+            font-weight: 900;
+            position: absolute;
+            left: -9999px;
+            visibility: hidden;
+        }
+    </style>
+</head>
+<body>
+
+<div class="font-preload">.</div>
+<div id="game-container" oncontextmenu="return false;"></div>
+
+<script>
+// ============================================================================
+// 1. EASY ASSET, COLORS, TEXT, CANS, HAZARDS & GAMEPLAY CONFIGURATION
+// ============================================================================
+const ASSETS_CONFIG = {
+    fontFamily: 'Raleway, sans-serif',
+
+    // EASILY CHANGE HIGH SCORE DISPLAY & START SCREEN MATTE COLORS HERE!
+    highScoreStyle: {
+        bgColor:         '#000', // High Score box background color (0xRRGGBB hex)
+        bgAlpha:         0.95,     // High Score box background opacity (0.0 to 1.0)
+        borderColor:     '#fff', // High Score box border color (0xRRGGBB hex)
+        borderWidth:     1.5,      // High Score box border thickness (px)
+        fontColor:       '#fff',// High Score text font color ('#RRGGBB' CSS hex)
+
+        startMatteColor: 0x000000, // Start screen background matte color
+        startMatteAlpha: 0.86,     // Start screen background matte opacity (0.0 to 1.0)
+        startMatteWidth: 300,      // Full 300px width
+        startMatteHeight:250       // Full 250px height
+    },
+
+    // EASILY ADD OR CHANGE YOUR CREDITS HERE
+    credits: [
+        "A game by GrimyGames.com",
+        "Code & Logic: Google Gemini",
+        "Sound FX: Freesound.org",
+        "Art & Assets: Dirty Danny"
+    ],
+
+    // CUSTOMIZE ALL ALERTS, TITLE SCREEN & MENU LABELS HERE
+    text: {
+        // Title Screen Text
+        gameTitle:             "SKETCHY STOMP",
+        playBtnLabel:          "PLAY",
+        exitBtnLabel:          "EXIT",
+        titleHighScorePrefix:  "HIGH SCORE: ",
+        titleBestStreakPrefix: "BEST STREAK: ",
+        timesUpHeader:         "TIME'S UP! SCORE: ",
+        newRecordHeader:       "NEW HIGH SCORE: ",
+
+        // Only alerts shown during gameplay
+        winStatus:             "CRUSHED IT! +1",
+        streakPrefix:          "CRUSH STREAK x",
+        bonusTimeAlert:        "STREAK BONUS! +2s!",
+        impaledStatus:         "OUCH! IMPALED FOOT! -1",
+
+        // Hamburger Options & High Score Menu Text
+        menuTitle:             "OPTIONS & HIGH SCORE",
+        highScoreLabel:        "HIGH SCORE:",
+        bestStreakLabel:       "BEST STREAK:",
+        menuMuteRowLabel:      "SOUND FX:",
+        menuResetRowLabel:     "HIGH SCORE:",
+        resetBtnLabel:         "RESET",
+        resetConfirmLabel:     "SURE?!",
+        resetDoneMsg:          "HIGH SCORE WIPED!",
+        menuHintDefault:       "30s ROUND: STOMP CANS (+1) | AVOID NAILS (-1)",
+        menuBtnLabel:          "☰"
+    },
+
+    // 7 RANDOM CANS TO CRUSH (+1 POINT WHEN STOMPED)
+    cans: [
+        { key: 'can1', crushedKey: 'can1_flat', path: 'img/crush/can-1.png', crushedPath: 'img/crush/can-1-flat.png', color: 0x00ffcc, labelColor: 0xff0055 },
+        { key: 'can2', crushedKey: 'can2_flat', path: 'img/crush/can-2.png', crushedPath: 'img/crush/can-2-flat.png', color: 0x00dd44, labelColor: 0x111111 },
+        { key: 'can3', crushedKey: 'can3_flat', path: 'img/crush/can-3.png', crushedPath: 'img/crush/can-3-flat.png', color: 0xffdd00, labelColor: 0x2b4c3f },
+        { key: 'can4', crushedKey: 'can4_flat', path: 'img/crush/can-4.png', crushedPath: 'img/crush/can-4-flat.png', color: 0xff1133, labelColor: 0xffffff },
+        { key: 'can5', crushedKey: 'can5_flat', path: 'img/crush/can-5.png', crushedPath: 'img/crush/can-5-flat.png', color: 0x9922ff, labelColor: 0x00ffcc },
+        { key: 'can6', crushedKey: 'can6_flat', path: 'img/crush/can-6.png', crushedPath: 'img/crush/can-6-flat.png', color: 0xd4af37, labelColor: 0x111111 },
+        { key: 'can7', crushedKey: 'can7_flat', path: 'img/crush/can-7.png', crushedPath: 'img/crush/can-7-flat.png', color: 0x0088ff, labelColor: 0xffdd00 }
+    ],
+
+    // 3 RANDOM FOOT-IMPALING HAZARDS (-1 POINT & BLOODY BOOT IF STOMPED!)
+    hazards: [
+        { key: 'hazard1', path: 'img/crush/hazard-1.png' }, // Rusty Nail
+        { key: 'hazard2', path: 'img/crush/hazard-2.png' }, // Broken Bottle
+        { key: 'hazard3', path: 'img/crush/hazard-3.png' }  // Used Syringe
+    ],
+
+    images: {
+        // CORE GAME, BLOOD DROP & BUTTON ART
+        background:        'img/crush/bg.png',                  // 300x250 background art
+        titleLogo:         'img/crush/title-logo.png',          // 184x50 Title Screen Logo
+        playBtn:           'img/crush/play-btn.png',            // 104x30 Title Screen Play Button
+        exitBtn:           'img/crush/exit-btn.png',            // 44x16 In-Game Exit to Title Button
+        bloodDrop:         'img/crush/blood-drop.png',          // 10x14 Editable Blood Drop Particle PNG!
+        stompBoot:         'img/crush/stomp-boot.png',          // 64x200 tall boot + leg (extends offscreen!)
+        stompBootBloody:   'img/crush/stomp-boot-bloody.png',   // 64x200 bloody impaled boot + leg!
+        defaultCrushedCan: 'img/crush/can-flat-default.png',    // 52x26 optional shared crushed can
+
+        // CUSTOMIZABLE TIMER BAR IMAGES & SIZES
+        roundTimerBg:      'img/crush/round-timer-bg.png',      // 300x5 Round Timer Bar BG
+        roundTimerFill:    'img/crush/round-timer-fill.png',    // 296x3 Round Timer Bar Fill
+        itemTimerBg:       'img/crush/item-timer-bg.png',       // 88x8 Item Timer Bar BG
+        itemTimerFill:     'img/crush/item-timer-fill.png',     // 84x4 Item Timer Bar Fill
+
+        // SHARED UI & HUD ASSETS
+        creditsBg:         'img/game/credits-bg.png',           // 260x200 credits modal bg
+        creditsLogo:       'img/game/credits-logo.png',         // 140x50 credits modal logo
+        creditsBtn:        'img/game/credits-btn.png',          // 48x16 button to open credits
+        closeBtn:          'img/game/close-btn.png',            // 24x24 close X button
+        playerIcon:        'img/game/player-icon.png',          // 16x16 face icon next to player score
+        worldIcon:         'img/game/world-icon.png',           // 16x16 globe icon next to world score
+        menuBtn:           'img/graffiti/menu-btn.png',         // 22x22 top-right hamburger icon
+        menuBg:            'img/graffiti/menu-bg.png',          // 260x190 options modal background
+        menuTitleImg:      'img/crush/menu-title.png',          // 170x22 options header image
+        muteOn:            'img/game/mute-on.png',              // 22x22 muted icon (inside menu)
+        muteOff:           'img/game/mute-off.png'              // 22x22 unmuted icon (inside menu)
+    },
+
+    audio: {
+        bootWhoosh:   'audio/crush/boot-slam.wav',      // Sound when boot slams down
+        crushWin:     'audio/crush/can-crush.wav',      // Crunch sound when a can is stomped
+        impaleScream: 'audio/crush/foot-impale.wav',    // Pain sound when hitting a nail/hazard!
+        canSlide:     'audio/bottle-slide.wav',         // Sound when a CAN slides in/out
+        hazardSlide:  'audio/bottle-slide.wav',   // Distinct sound when a HAZARD slides in/out!
+        timerTick:    'audio/graffiti/nozzle-click.wav',// Last 5 seconds countdown tick
+        roundOver:    'audio/success.wav',          // End of 30s round buzzer
+        menuClick:    'audio/graffiti/nozzle-click.wav' // UI click sound
+    },
+
+    gameplay: {
+        roundDuration: 30000,          // 30.0 seconds (30000ms) per game round!
+        canStayDuration: 500,          // 500ms before the can slides away!
+        hazardStayDuration: 700,       // 700ms before the hazard slides away!
+        slideInDuration: 105,          // Fast slide-in so 500ms feels super snappy
+        slideOutDuration: 105,         // Fast slide-out
+        hazardSpawnChance: 0.30,       // 30% chance to spawn one of the 3 hazards, 70% chance for a can
+        streakForTimeBonus: 5,         // Every 5 cans crushed in a row awards bonus time!
+        streakTimeBonusMs: 2000,       // +2.0 seconds bonus time per 5-streak
+        bloodDropCount: 16,            // Number of blood drop sprites spawned when impaled
+        allowNegativeScore: false      // false = Score stops at 0
+    },
+
+    metrics: {
+        // Top HUD Positions
+        topHudY: 18,
+        creditsBtnX: 34,
+        exitBtnX: 34,                  // Exit button placed under credits button (Y: 42)
+        exitBtnY: 42,
+        exitBtnWidth: 44,
+        exitBtnHeight: 16,
+        menuBtnX: 280,
+        roundTimerY: 42,               // 30.0s countdown timer placed under menu button (Y: 42)
+        roundTimerBarX: 150,
+        roundTimerBarY: 4,
+
+        // Bottom Centered Scores (Y: 236)
+        bottomHudY: 236,
+        playerIconX: 86,
+        playerScoreX: 98,
+        worldIconX: 184,
+        worldScoreX: 196,
+
+        alertStatusY: 220,             // Feed text (status alert) placed just above the score (Y: 220)
+        itemTimerBarX: 150,
+        itemTimerBarY: 120,
+
+        // Boot is anchored at the BOTTOM SOLE (origin 0.5, 1) with a 200px tall leg
+        bootRestX: 150,
+        bootRestY: 106,                // Sole Y when waiting at the top
+        bootSlamY: 194,                // Sole Y when slamming the curb
+        bootWidth: 64,
+        bootHeight: 200,               // Tall leg extends offscreen above Y=0!
+
+        bloodDropWidth: 10,            // Width of each blood drop particle
+        bloodDropHeight: 14,           // Height of each blood drop particle
+
+        targetX: 150,                  // Center X on the curb
+        curbY: 168,                    // Center Y where cans & hazards sit
+        canWidth: 46,
+        canHeight: 62,
+        crushedWidth: 52,
+        crushedHeight: 26,
+        hazardWidth: 48,
+        hazardHeight: 56
+    }
+};
+
+// CounterAPI for Global World Stomps
+const GLOBAL_API_NAMESPACE = 'grimygames';
+const GLOBAL_API_KEY = 'stomps';
+const WORLD_SCORE_OFFSET = 0;
+
+// ============================================================================
+// 2. CROSS-BROWSER ASSET PRELOADER
+// ============================================================================
+const LOADED_HTML_IMAGES = {};
+const LOADED_HTML_AUDIO = {};
+
+function preloadLocalAssets(onReady) {
+    const allImageEntries = [
+        ...Object.entries(ASSETS_CONFIG.images),
+        ...ASSETS_CONFIG.cans.map(c => [c.key, c.path]),
+        ...ASSETS_CONFIG.cans.map(c => [c.crushedKey, c.crushedPath]),
+        ...ASSETS_CONFIG.hazards.map(h => [h.key, h.path])
+    ];
+    let remaining = allImageEntries.length;
+
+    Object.entries(ASSETS_CONFIG.audio).forEach(([key, path]) => {
+        if (!path) return;
+        const cleanPath = path.replace(/\\/g, '/');
+        const audio = new Audio();
+        audio.src = cleanPath;
+        audio.preload = 'auto';
+        audio.addEventListener('canplaythrough', () => {
+            LOADED_HTML_AUDIO[key] = audio;
+        }, { once: true });
+        audio.addEventListener('error', () => {}, { once: true });
+    });
+
+    const startWhenFontReady = () => {
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(() => onReady()).catch(() => onReady());
+        } else {
+            onReady();
+        }
+    };
+
+    if (remaining === 0) {
+        startWhenFontReady();
+        return;
+    }
+
+    const checkDone = () => {
+        remaining--;
+        if (remaining <= 0) startWhenFontReady();
+    };
+
+    allImageEntries.forEach(([key, path]) => {
+        if (!path) {
+            checkDone();
+            return;
+        }
+        const cleanPath = path.replace(/\\/g, '/');
+        const img = new Image();
+        img.onload = () => {
+            LOADED_HTML_IMAGES[key] = img;
+            checkDone();
+        };
+        img.onerror = () => {
+            checkDone();
+        };
+        img.src = cleanPath;
+    });
+}
+
+// ============================================================================
+// 3. MAIN PHASER GAME SCENE
+// ============================================================================
+class StompGame extends Phaser.Scene {
+    constructor() {
+        super('StompGame');
+        this.playerScore = 0;
+        this.highScore = parseInt(localStorage.getItem('grimy_stomp_high')) || 0;
+        this.bestStreak = parseInt(localStorage.getItem('grimy_stomp_streak')) || 0;
+        this.worldScore = 0;
+
+        this.gameState = 'TITLE'; // 'TITLE' or 'PLAYING'
+        this.roundTimeRemaining = ASSETS_CONFIG.gameplay.roundDuration;
+        this.lastWholeSecond = 30;
+
+        this.currentStreak = 0;
+        this.isMuted = localStorage.getItem('grimy_stomp_muted') === 'true';
+        this.isBootCurrentlyBloody = false;
+
+        this.canInteract = false;
+        this.isModalOpen = false;
+        this.isResetConfirming = false;
+
+        this.currentItem = null;
+        this.itemTimeRemaining = 0;
+        this.itemTotalTime = 500;
+    }
+
+    create() {
+        Object.entries(LOADED_HTML_IMAGES).forEach(([key, imgElement]) => {
+            if (!this.textures.exists(key)) {
+                this.textures.addImage(key, imgElement);
+            }
+        });
+
+        this.createFallbackTextures();
+        this.fetchWorldScore();
+
+        const m = ASSETS_CONFIG.metrics;
+
+        // 1. Background Art + Curb Blood Stain Layer
+        this.add.image(150, 125, 'background').setDisplaySize(300, 250).setDepth(0);
+        this.curbStainGraphics = this.add.graphics().setDepth(2);
+
+        // 2. TOP HUD (Credits on Left, Menu on Right)
+        this.creditsBtn = this.add.image(m.creditsBtnX, m.topHudY, 'creditsBtn')
+            .setDisplaySize(48, 16)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(65);
+
+        this.creditsBtn.on('pointerdown', (pointer, localX, localY, event) => {
+            event.stopPropagation();
+            this.unlockWebAudio();
+            this.openCredits();
+        });
+
+        // Exit button placed under credits button
+        this.exitBtn = this.add.image(m.exitBtnX, m.exitBtnY, 'exitBtn')
+            .setDisplaySize(m.exitBtnWidth, m.exitBtnHeight)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(65)
+            .setVisible(false);
+
+        this.exitBtn.on('pointerdown', (pointer, localX, localY, event) => {
+            event.stopPropagation();
+            this.playSound('menuClick');
+            this.exitToTitle();
+        });
+
+        this.menuBtn = this.add.image(m.menuBtnX, m.topHudY, 'menuBtn')
+            .setDisplaySize(22, 22)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(65);
+
+        this.menuBtn.on('pointerdown', (pointer, localX, localY, event) => {
+            event.stopPropagation();
+            this.unlockWebAudio();
+            this.openOptionsMenu();
+        });
+
+        // 30.0s Timer placed directly under menu button on the right
+        this.roundTimerText = this.add.text(285, m.roundTimerY, '30.0s', {
+            fontFamily: ASSETS_CONFIG.fontFamily,
+            fontSize: '12px',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 3,
+            fontStyle: '900'
+        }).setOrigin(1, 0.5).setDepth(65).setVisible(false);
+
+        // 3. BOTTOM CENTERED HUD (Player Score & World Score with icons)
+        this.add.image(m.playerIconX, m.bottomHudY, 'playerIcon').setDisplaySize(16, 16).setDepth(65);
+        this.playerScoreText = this.add.text(m.playerScoreX, m.bottomHudY, `${this.playerScore}`, {
+            fontFamily: ASSETS_CONFIG.fontFamily,
+            fontSize: '14px',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 3,
+            fontStyle: '900'
+        }).setOrigin(0, 0.5).setDepth(65);
+
+        this.add.image(m.worldIconX, m.bottomHudY, 'worldIcon').setDisplaySize(16, 16).setDepth(65);
+        this.worldScoreText = this.add.text(m.worldScoreX, m.bottomHudY, `...`, {
+            fontFamily: ASSETS_CONFIG.fontFamily,
+            fontSize: '14px',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 3,
+            fontStyle: '900'
+        }).setOrigin(0, 0.5).setDepth(65);
+
+        // Feed text (Status Alert Text) placed just above the score
+        this.statusText = this.add.text(150, m.alertStatusY, '', {
+            fontFamily: ASSETS_CONFIG.fontFamily,
+            fontSize: '11.5px',
+            color: '#00ffcc',
+            stroke: '#000000',
+            strokeThickness: 3,
+            fontStyle: '900'
+        }).setOrigin(0.5).setDepth(26);
+
+        // 4. Timer Bar Image GameObjects (Round & Item Timers)
+        this.roundTimerBgImg = this.add.image(m.roundTimerBarX, m.roundTimerBarY, 'roundTimerBg').setDisplaySize(300, 5).setDepth(21).setVisible(false);
+        this.roundTimerFillImg = this.add.image(2, m.roundTimerBarY, 'roundTimerFill').setDisplaySize(296, 3).setOrigin(0, 0.5).setDepth(22).setVisible(false);
+
+        this.itemTimerBgImg = this.add.image(m.itemTimerBarX, m.itemTimerBarY, 'itemTimerBg').setDisplaySize(88, 8).setDepth(14).setVisible(false);
+        this.itemTimerFillImg = this.add.image(m.itemTimerBarX - 42, m.itemTimerBarY, 'itemTimerFill').setDisplaySize(84, 4).setOrigin(0, 0.5).setDepth(15).setVisible(false);
+
+        this.shockwaveGraphics = this.add.graphics().setDepth(9);
+        this.activeShockwaves = [];
+        this.floatingTexts = [];
+
+        // 5. Top Stomping Boot
+        this.boot = this.add.image(m.bootRestX, m.bootRestY, 'stompBoot')
+            .setOrigin(0.5, 1)
+            .setDisplaySize(m.bootWidth, m.bootHeight)
+            .setDepth(12);
+
+        // 6. Blood Drop Particles Array
+        this.bloodDrops = [];
+
+        // 7. Build Title Screen, Credits Modal & Options Modal
+        this.buildTitleScreen();
+        this.buildCreditsModal();
+        this.buildOptionsMenuModal();
+
+        // 8. Poll Global Server Score every 10s
+        this.time.addEvent({
+            delay: 10000,
+            callback: this.fetchWorldScore,
+            callbackScope: this,
+            loop: true
+        });
+
+        // 9. Input Listeners
+        this.input.on('pointerdown', (pointer, currentlyOver) => {
+            this.unlockWebAudio();
+            if (this.isModalOpen || this.gameState !== 'PLAYING') return;
+            if (
+                currentlyOver.includes(this.menuBtn) ||
+                currentlyOver.includes(this.creditsBtn) ||
+                currentlyOver.includes(this.exitBtn)
+            ) {
+                return;
+            }
+            this.triggerStomp();
+        });
+
+        this.input.keyboard.on('keydown-SPACE', () => {
+            this.unlockWebAudio();
+            if (this.isModalOpen) return;
+            if (this.gameState === 'TITLE') {
+                this.playSound('menuClick');
+                this.startRound();
+            } else if (this.gameState === 'PLAYING') {
+                this.triggerStomp();
+            }
+        });
+
+        this.input.keyboard.on('keydown-ESC', () => {
+            if (this.isModalOpen) {
+                if (this.menuModal.visible) this.closeOptionsMenu();
+                if (this.creditsModal.visible) this.closeCredits();
+                return;
+            }
+            if (this.gameState === 'PLAYING') {
+                this.playSound('menuClick');
+                this.exitToTitle();
+            }
+        });
+
+        this.showTitleScreen(false);
+    }
+
+    unlockWebAudio() {
+        try {
+            if (this.sound && this.sound.context && this.sound.context.state === 'suspended') {
+                this.sound.context.resume();
+            }
+        } catch (e) {}
+    }
+
+    buildTitleScreen() {
+        const font = ASSETS_CONFIG.fontFamily;
+        const hs = ASSETS_CONFIG.highScoreStyle;
+
+        this.titleContainer = this.add.container(0, 0).setDepth(60);
+
+        const dimBg = this.add.rectangle(
+            150,
+            125,
+            hs.startMatteWidth || 300,
+            hs.startMatteHeight || 250,
+            hs.startMatteColor,
+            hs.startMatteAlpha
+        ).setInteractive();
+
+        const titleLogo = this.add.image(150, 78, 'titleLogo').setDisplaySize(184, 50);
+
+        this.titleResultText = this.add.text(150, 116, '30-SECOND CAN CRUSH BLITZ', {
+            fontFamily: font,
+            fontSize: '10.5px',
+            color: '#00ffcc',
+            fontStyle: '900'
+        }).setOrigin(0.5);
+
+        this.titleScoreBadge = this.add.rectangle(150, 146, 216, 28, hs.bgColor, hs.bgAlpha)
+            .setStrokeStyle(hs.borderWidth, hs.borderColor);
+
+        this.titleHighScoreText = this.add.text(150, 146, '', {
+            fontFamily: font,
+            fontSize: '11px',
+            color: hs.fontColor,
+            fontStyle: '900'
+        }).setOrigin(0.5);
+
+        this.playBtn = this.add.image(150, 192, 'playBtn')
+            .setDisplaySize(104, 30)
+            .setInteractive({ useHandCursor: true });
+
+        this.playBtn.on('pointerdown', (p, lx, ly, ev) => {
+            ev.stopPropagation();
+            this.unlockWebAudio();
+            this.playSound('menuClick');
+            this.startRound();
+        });
+
+        this.titleContainer.add([
+            dimBg,
+            titleLogo,
+            this.titleResultText,
+            this.titleScoreBadge,
+            this.titleHighScoreText,
+            this.playBtn
+        ]);
+    }
+
+    cleanupActiveRoundObjects() {
+        this.canInteract = false;
+        this.roundTimerBgImg.setVisible(false);
+        this.roundTimerFillImg.setVisible(false);
+        this.itemTimerBgImg.setVisible(false);
+        this.itemTimerFillImg.setVisible(false);
+
+        this.shockwaveGraphics.clear();
+        this.activeShockwaves = [];
+
+        this.floatingTexts.forEach(ft => ft.txt.destroy());
+        this.floatingTexts = [];
+
+        this.bloodDrops.forEach(b => b.sprite.destroy());
+        this.bloodDrops = [];
+
+        if (this.targetSprite) {
+            this.tweens.killTweensOf(this.targetSprite);
+            this.targetSprite.destroy();
+            this.targetSprite = null;
+        }
+
+        const m = ASSETS_CONFIG.metrics;
+        this.tweens.killTweensOf(this.boot);
+        this.boot
+            .setPosition(m.bootRestX, m.bootRestY)
+            .setDisplaySize(m.bootWidth, m.bootHeight)
+            .setAngle(0);
+    }
+
+    exitToTitle() {
+        this.cleanupActiveRoundObjects();
+        this.statusText.setText('');
+        this.showTitleScreen(false);
+    }
+
+    showTitleScreen(fromRoundEnd = false, isNewBest = false) {
+        this.gameState = 'TITLE';
+        this.cleanupActiveRoundObjects();
+        this.roundTimerText.setVisible(false);
+        this.exitBtn.setVisible(false);
+
+        const t = ASSETS_CONFIG.text;
+        const hs = ASSETS_CONFIG.highScoreStyle;
+        if (fromRoundEnd) {
+            if (isNewBest) {
+                this.titleResultText.setText(`${t.newRecordHeader}${this.playerScore} CANS!`).setColor('#00ffcc');
+            } else {
+                this.titleResultText.setText(`${t.timesUpHeader}${this.playerScore} CANS`).setColor('#ff0055');
+            }
+        } else {
+            this.titleResultText.setText('FUCK YEAH!').setColor('#fff');
+        }
+
+        this.titleScoreBadge.setFillStyle(hs.bgColor, hs.bgAlpha).setStrokeStyle(hs.borderWidth, hs.borderColor);
+        this.titleHighScoreText
+            .setText(`${t.titleHighScorePrefix}${this.highScore}   |   ${t.titleBestStreakPrefix}${this.bestStreak}`)
+            .setColor(hs.fontColor);
+
+        this.titleContainer.setVisible(true);
+    }
+
+    startRound() {
+        const g = ASSETS_CONFIG.gameplay;
+        const m = ASSETS_CONFIG.metrics;
+
+        this.cleanupActiveRoundObjects();
+        this.curbStainGraphics.clear();
+
+        this.gameState = 'PLAYING';
+        this.titleContainer.setVisible(false);
+        this.exitBtn.setVisible(true);
+
+        this.playerScore = 0;
+        this.currentStreak = 0;
+        this.playerScoreText.setText('0').setColor('#ffffff').setScale(1);
+        this.statusText.setText('');
+
+        this.roundTimeRemaining = g.roundDuration || 30000;
+        this.lastWholeSecond = Math.ceil(this.roundTimeRemaining / 1000);
+        this.roundTimerText.setVisible(true).setColor('#ffffff');
+        this.roundTimerBgImg.setVisible(true);
+        this.roundTimerFillImg.setVisible(true);
+
+        this.isBootCurrentlyBloody = false;
+        this.boot.setTexture('stompBoot').setDisplaySize(m.bootWidth, m.bootHeight);
+
+        this.spawnNextItem(true);
+    }
+
+    endRound() {
+        this.gameState = 'TITLE';
+        this.playSound('roundOver');
+        this.cameras.main.shake(150, 0.013);
+
+        let isNewBest = false;
+        if (this.playerScore > this.highScore) {
+            this.highScore = this.playerScore;
+            isNewBest = true;
+        }
+        this.saveLocalScores();
+        this.showTitleScreen(true, isNewBest);
+    }
+
+    showAlert(message, colorHex = '#00ffcc') {
+        this.statusText.setText(message).setColor(colorHex);
+        if (this.alertClearEvent) this.alertClearEvent.remove(false);
+        this.alertClearEvent = this.time.delayedCall(600, () => {
+            this.statusText.setText('');
+        });
+    }
+
+    spawnFloatingText(x, y, textStr, colorHex = '#00ffcc', fontSize = '13px') {
+        const txt = this.add.text(x, y, textStr, {
+            fontFamily: ASSETS_CONFIG.fontFamily,
+            fontSize: fontSize,
+            color: colorHex,
+            stroke: '#000000',
+            strokeThickness: 3,
+            fontStyle: '900'
+        }).setOrigin(0.5).setDepth(24);
+
+        this.floatingTexts.push({ txt, life: 480, maxLife: 480 });
+    }
+
+    spawnImpactShockwave(x, y, colorHex = 0x00ffcc) {
+        this.activeShockwaves.push({
+            x,
+            y,
+            radius: 8,
+            maxRadius: 38,
+            alpha: 0.95,
+            color: colorHex
+        });
+    }
+
+    spawnNextItem(slideIn = true) {
+        if (this.gameState !== 'PLAYING') return;
+
+        const g = ASSETS_CONFIG.gameplay;
+        const m = ASSETS_CONFIG.metrics;
+
+        if (this.targetSprite) {
+            this.tweens.killTweensOf(this.targetSprite);
+            this.targetSprite.destroy();
+            this.targetSprite = null;
+        }
+
+        if (this.isBootCurrentlyBloody) {
+            this.isBootCurrentlyBloody = false;
+            this.boot.setTexture('stompBoot').setDisplaySize(m.bootWidth, m.bootHeight);
+        }
+
+        const isHazard = Math.random() < g.hazardSpawnChance;
+
+        if (isHazard) {
+            const hazardCfg = Phaser.Utils.Array.GetRandom(ASSETS_CONFIG.hazards);
+            this.currentItem = { type: 'hazard', cfg: hazardCfg };
+            this.itemTotalTime = g.hazardStayDuration || 700;
+            this.targetSprite = this.add.image(slideIn ? 340 : m.targetX, m.curbY, hazardCfg.key)
+                .setDisplaySize(m.hazardWidth, m.hazardHeight)
+                .setDepth(8);
+        } else {
+            const canCfg = Phaser.Utils.Array.GetRandom(ASSETS_CONFIG.cans);
+            this.currentItem = { type: 'can', cfg: canCfg };
+            this.itemTotalTime = g.canStayDuration || 500;
+            this.targetSprite = this.add.image(slideIn ? 340 : m.targetX, m.curbY, canCfg.key)
+                .setDisplaySize(m.canWidth, m.canHeight)
+                .setDepth(8);
+        }
+
+        this.itemTimeRemaining = this.itemTotalTime;
+        this.itemTimerBgImg.setVisible(true);
+        this.itemTimerFillImg.setVisible(true);
+
+        if (slideIn) {
+            this.playSound(isHazard ? 'hazardSlide' : 'canSlide');
+            this.tweens.add({
+                targets: this.targetSprite,
+                x: m.targetX,
+                duration: g.slideInDuration || 105,
+                ease: 'Quad.easeOut',
+                onComplete: () => {
+                    if (this.gameState === 'PLAYING') {
+                        this.canInteract = true;
+                    }
+                }
+            });
+        } else {
+            this.canInteract = true;
+        }
+    }
+
+    update(time, delta) {
+        const safeDelta = Math.min(delta, 50);
+        const dt = safeDelta / 1000;
+
+        for (let i = this.bloodDrops.length - 1; i >= 0; i--) {
+            const b = this.bloodDrops[i];
+            b.sprite.x += b.vx * dt;
+            b.sprite.y += b.vy * dt;
+            b.vy += 520 * dt;
+            b.sprite.rotation = Math.atan2(b.vy, b.vx) - Math.PI / 2;
+            b.life -= safeDelta;
+            b.sprite.setAlpha(Phaser.Math.Clamp(b.life / 200, 0, 1));
+            if (b.life <= 0) {
+                b.sprite.destroy();
+                this.bloodDrops.splice(i, 1);
+            }
+        }
+
+        for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+            const ft = this.floatingTexts[i];
+            ft.txt.y -= 36 * dt;
+            ft.life -= safeDelta;
+            ft.txt.setAlpha(Phaser.Math.Clamp(ft.life / ft.maxLife, 0, 1));
+            if (ft.life <= 0) {
+                ft.txt.destroy();
+                this.floatingTexts.splice(i, 1);
+            }
+        }
+
+        this.shockwaveGraphics.clear();
+        for (let i = this.activeShockwaves.length - 1; i >= 0; i--) {
+            const sw = this.activeShockwaves[i];
+            sw.radius += 140 * dt;
+            sw.alpha -= 3.2 * dt;
+            if (sw.alpha <= 0) {
+                this.activeShockwaves.splice(i, 1);
+                continue;
+            }
+            this.shockwaveGraphics.lineStyle(2, sw.color, sw.alpha);
+            this.shockwaveGraphics.strokeEllipse(sw.x, sw.y, sw.radius * 2, sw.radius * 0.75);
+        }
+
+        if (this.gameState !== 'PLAYING' || this.isModalOpen) {
+            return;
+        }
+
+        this.roundTimeRemaining = Math.max(0, this.roundTimeRemaining - safeDelta);
+        const secLeft = this.roundTimeRemaining / 1000;
+        this.roundTimerText.setText(`${secLeft.toFixed(1)}s`);
+
+        const wholeSec = Math.ceil(secLeft);
+        if (wholeSec <= 5 && wholeSec > 0 && wholeSec !== this.lastWholeSecond) {
+            this.lastWholeSecond = wholeSec;
+            this.playSound('timerTick');
+            this.roundTimerText.setColor('#ff0055');
+        } else if (wholeSec > 5) {
+            this.roundTimerText.setColor('#ffffff');
+        }
+
+        const roundPct = Phaser.Math.Clamp(this.roundTimeRemaining / ASSETS_CONFIG.gameplay.roundDuration, 0, 1);
+        this.roundTimerFillImg.setDisplaySize(296 * roundPct, 3);
+
+        if (this.roundTimeRemaining <= 0) {
+            this.endRound();
+            return;
+        }
+
+        if (!this.canInteract || !this.currentItem) {
+            this.itemTimerBgImg.setVisible(false);
+            this.itemTimerFillImg.setVisible(false);
+            return;
+        }
+
+        this.itemTimeRemaining -= safeDelta;
+        const pct = Phaser.Math.Clamp(this.itemTimeRemaining / this.itemTotalTime, 0, 1);
+
+        this.itemTimerBgImg.setVisible(true);
+        this.itemTimerFillImg.setVisible(true);
+        this.itemTimerFillImg.setDisplaySize(84 * pct, 4);
+
+        if (this.itemTimeRemaining <= 0) {
+            this.handleTimerExpiredSlideAway();
+        }
+    }
+
+    handleTimerExpiredSlideAway() {
+        this.canInteract = false;
+        this.itemTimerBgImg.setVisible(false);
+        this.itemTimerFillImg.setVisible(false);
+        const g = ASSETS_CONFIG.gameplay;
+
+        const isHazard = this.currentItem && this.currentItem.type === 'hazard';
+        if (!isHazard) {
+            this.currentStreak = 0;
+            this.playerScoreText.setColor('#ffffff');
+        }
+
+        this.playSound(isHazard ? 'hazardSlide' : 'canSlide');
+        this.tweens.add({
+            targets: this.targetSprite,
+            x: -60,
+            duration: g.slideOutDuration || 105,
+            ease: 'Quad.easeIn',
+            onComplete: () => {
+                this.spawnNextItem(true);
+            }
+        });
+    }
+
+    triggerStomp() {
+        if (!this.canInteract || this.isModalOpen || this.gameState !== 'PLAYING') return;
+        this.canInteract = false;
+        this.itemTimerBgImg.setVisible(false);
+        this.itemTimerFillImg.setVisible(false);
+        this.playSound('bootWhoosh');
+
+        const m = ASSETS_CONFIG.metrics;
+
+        this.tweens.killTweensOf(this.boot);
+        this.boot.setDisplaySize(m.bootWidth, m.bootHeight).setAngle(0);
+
+        this.tweens.add({
+            targets: this.boot,
+            y: m.bootSlamY,
+            duration: 60,
+            ease: 'Quad.easeIn',
+            onComplete: () => {
+                this.boot.setDisplaySize(m.bootWidth * 1.12, m.bootHeight * 0.96);
+
+                if (this.currentItem.type === 'can') {
+                    this.handleCanCrushed();
+                } else {
+                    this.handleHazardImpaled();
+                }
+            }
+        });
+    }
+
+    handleCanCrushed() {
+        const m = ASSETS_CONFIG.metrics;
+        const g = ASSETS_CONFIG.gameplay;
+        const t = ASSETS_CONFIG.text;
+        const canCfg = this.currentItem.cfg;
+
+        this.playSound('crushWin');
+        this.cameras.main.shake(85, 0.011);
+
+        const crushedTexKey = this.textures.exists(canCfg.crushedKey) ? canCfg.crushedKey : 'defaultCrushedCan';
+        this.targetSprite
+            .setTexture(crushedTexKey)
+            .setDisplaySize(m.crushedWidth, m.crushedHeight)
+            .setY(m.curbY + (m.canHeight - m.crushedHeight) / 2);
+
+        this.spawnImpactShockwave(m.targetX, m.curbY + 22, canCfg.color);
+
+        this.playerScore++;
+        this.currentStreak++;
+        if (this.playerScore > this.highScore) {
+            this.highScore = this.playerScore;
+        }
+        if (this.currentStreak > this.bestStreak) {
+            this.bestStreak = this.currentStreak;
+        }
+        this.saveLocalScores();
+        this.playerScoreText.setText(`${this.playerScore}`);
+        this.playerScoreText.setColor(this.currentStreak >= 3 ? '#ffdd00' : '#ffffff');
+
+        this.tweens.killTweensOf(this.playerScoreText);
+        this.playerScoreText.setScale(1.35);
+        this.tweens.add({
+            targets: this.playerScoreText,
+            scaleX: 1,
+            scaleY: 1,
+            duration: 160,
+            ease: 'Back.easeOut'
+        });
+
+        this.incrementWorldScore();
+
+        if (g.streakForTimeBonus && this.currentStreak % g.streakForTimeBonus === 0) {
+            this.roundTimeRemaining = Math.min(g.roundDuration, this.roundTimeRemaining + (g.streakTimeBonusMs || 2000));
+            this.showAlert(t.bonusTimeAlert, '#ffdd00');
+            this.spawnFloatingText(m.targetX, m.curbY - 12, '+1  (+2.0s!)', '#ffdd00', '14px');
+        } else {
+            const msg = this.currentStreak > 1 ? `${t.streakPrefix}${this.currentStreak}! (+1)` : t.winStatus;
+            this.showAlert(msg, '#00ffcc');
+            const popLabel = this.currentStreak > 1 ? `+1 (x${this.currentStreak})` : '+1';
+            this.spawnFloatingText(m.targetX, m.curbY - 10, popLabel, '#00ffcc', '13px');
+        }
+
+        this.tweens.add({
+            targets: this.boot,
+            y: m.bootRestY,
+            displayWidth: m.bootWidth,
+            displayHeight: m.bootHeight,
+            delay: 80,
+            duration: 135,
+            ease: 'Back.easeOut'
+        });
+
+        this.tweens.add({
+            targets: this.targetSprite,
+            x: -60,
+            angle: -20,
+            delay: 90,
+            duration: g.slideOutDuration || 105,
+            ease: 'Quad.easeIn',
+            onComplete: () => {
+                this.spawnNextItem(true);
+            }
+        });
+    }
+
+    handleHazardImpaled() {
+        const m = ASSETS_CONFIG.metrics;
+        const t = ASSETS_CONFIG.text;
+        const g = ASSETS_CONFIG.gameplay;
+
+        this.playSound('impaleScream');
+        this.cameras.main.shake(180, 0.02);
+        this.cameras.main.flash(120, 255, 0, 55);
+
+        this.isBootCurrentlyBloody = true;
+        this.boot.setTexture('stompBootBloody').setDisplaySize(m.bootWidth, m.bootHeight);
+
+        this.curbStainGraphics.fillStyle(0x99001a, 0.55);
+        this.curbStainGraphics.fillEllipse(
+            m.targetX + Phaser.Math.Between(-18, 18),
+            m.curbY + 24 + Phaser.Math.Between(-3, 4),
+            Phaser.Math.Between(22, 38),
+            Phaser.Math.Between(6, 11)
+        );
+
+        const dropCount = g.bloodDropCount || 16;
+        for (let i = 0; i < dropCount; i++) {
+            const scale = Phaser.Math.FloatBetween(0.65, 1.15);
+            const sprite = this.add.image(m.targetX + Phaser.Math.Between(-10, 10), m.curbY + 12, 'bloodDrop')
+                .setDisplaySize(m.bloodDropWidth * scale, m.bloodDropHeight * scale)
+                .setDepth(14);
+
+            const vx = Phaser.Math.Between(-145, 145);
+            const vy = Phaser.Math.Between(-210, -55);
+            sprite.rotation = Math.atan2(vy, vx) - Math.PI / 2;
+
+            this.bloodDrops.push({
+                sprite,
+                vx,
+                vy,
+                life: Phaser.Math.Between(320, 580)
+            });
+        }
+
+        this.currentStreak = 0;
+        if (g.allowNegativeScore) {
+            this.playerScore--;
+        } else {
+            this.playerScore = Math.max(0, this.playerScore - 1);
+        }
+        this.saveLocalScores();
+        this.playerScoreText.setText(`${this.playerScore}`).setColor('#ff0055');
+
+        this.showAlert(t.impaledStatus, '#ff0055');
+        this.spawnFloatingText(m.targetX, m.curbY - 14, '-1 OUCH!', '#ff0055', '14px');
+
+        this.tweens.add({
+            targets: this.boot,
+            y: m.bootRestY,
+            displayWidth: m.bootWidth,
+            displayHeight: m.bootHeight,
+            angle: -7,
+            delay: 130,
+            duration: 190,
+            ease: 'Sine.easeOut',
+            onComplete: () => {
+                this.boot.setAngle(0);
+            }
+        });
+
+        this.tweens.add({
+            targets: this.targetSprite,
+            x: -60,
+            delay: 150,
+            duration: g.slideOutDuration || 105,
+            ease: 'Quad.easeIn',
+            onComplete: () => {
+                this.spawnNextItem(true);
+            }
+        });
+    }
+
+    saveLocalScores() {
+        try {
+            localStorage.setItem('grimy_stomp_high', this.highScore);
+            localStorage.setItem('grimy_stomp_streak', this.bestStreak);
+        } catch (e) {}
+    }
+
+    buildOptionsMenuModal() {
+        const font = ASSETS_CONFIG.fontFamily;
+        const t = ASSETS_CONFIG.text;
+        const hs = ASSETS_CONFIG.highScoreStyle;
+
+        this.menuModal = this.add.container(0, 0).setDepth(110).setVisible(false);
+
+        const overlay = this.add.rectangle(150, 125, 300, 250, 0x000000, 0.88).setInteractive();
+        const panel = this.add.image(150, 125, 'menuBg').setDisplaySize(260, 190);
+        const titleImg = this.add.image(150, 44, 'menuTitleImg').setDisplaySize(170, 22);
+
+        const closeBtn = this.add.image(265, 40, 'closeBtn')
+            .setDisplaySize(24, 24)
+            .setInteractive({ useHandCursor: true });
+        closeBtn.on('pointerdown', (p, x, y, ev) => {
+            ev.stopPropagation();
+            this.closeOptionsMenu();
+        });
+
+        this.menuScoreBox = this.add.rectangle(150, 82, 224, 36, hs.bgColor, hs.bgAlpha)
+            .setStrokeStyle(hs.borderWidth, hs.borderColor);
+
+        this.menuHighScoreText = this.add.text(150, 82, '', {
+            fontFamily: font,
+            fontSize: '10.5px',
+            color: hs.fontColor,
+            fontStyle: '900',
+            align: 'center',
+            lineSpacing: 3
+        }).setOrigin(0.5);
+
+        const muteLabel = this.add.text(44, 124, t.menuMuteRowLabel, {
+            fontFamily: font,
+            fontSize: '10.5px',
+            color: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0, 0.5);
+
+        this.menuMuteBtn = this.add.image(214, 124, this.isMuted ? 'muteOn' : 'muteOff')
+            .setDisplaySize(22, 22)
+            .setInteractive({ useHandCursor: true });
+        this.menuMuteBtn.on('pointerdown', (p, x, y, ev) => {
+            ev.stopPropagation();
+            this.toggleMute();
+        });
+
+        const resetLabel = this.add.text(44, 158, t.menuResetRowLabel, {
+            fontFamily: font,
+            fontSize: '10.5px',
+            color: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0, 0.5);
+
+        this.resetScoreBtn = this.add.image(206, 158, 'resetBtnTex')
+            .setDisplaySize(64, 18)
+            .setInteractive({ useHandCursor: true });
+        this.resetScoreBtn.on('pointerdown', (p, x, y, ev) => {
+            ev.stopPropagation();
+            if (!this.isResetConfirming) {
+                this.isResetConfirming = true;
+                this.resetScoreBtn.setTexture('resetConfirmTex');
+                this.playSound('menuClick');
+            } else {
+                this.isResetConfirming = false;
+                this.resetScoreBtn.setTexture('resetBtnTex');
+                this.playerScore = 0;
+                this.highScore = 0;
+                this.bestStreak = 0;
+                this.currentStreak = 0;
+                this.saveLocalScores();
+                this.playerScoreText.setText('0');
+                this.refreshOptionsMenuUI();
+                if (this.gameState === 'TITLE') this.showTitleScreen(false);
+                this.menuHintText.setText(t.resetDoneMsg).setColor('#ff0055');
+                this.playSound('impaleScream');
+            }
+        });
+
+        this.menuHintText = this.add.text(150, 194, t.menuHintDefault, {
+            fontFamily: font,
+            fontSize: '9px',
+            color: '#aaaaaa',
+            fontStyle: 'bold'
+        }).setOrigin(0.5);
+
+        this.menuModal.add([
+            overlay,
+            panel,
+            titleImg,
+            closeBtn,
+            this.menuScoreBox,
+            this.menuHighScoreText,
+            muteLabel,
+            this.menuMuteBtn,
+            resetLabel,
+            this.resetScoreBtn,
+            this.menuHintText
+        ]);
+    }
+
+    refreshOptionsMenuUI() {
+        const t = ASSETS_CONFIG.text;
+        const hs = ASSETS_CONFIG.highScoreStyle;
+        this.menuScoreBox.setFillStyle(hs.bgColor, hs.bgAlpha).setStrokeStyle(hs.borderWidth, hs.borderColor);
+        this.menuHighScoreText
+            .setText(
+                `${t.highScoreLabel} ${this.highScore}   |   ${t.bestStreakLabel} ${this.bestStreak}\n` +
+                `ROUND SCORE: ${this.playerScore}`
+            )
+            .setColor(hs.fontColor);
+    }
+
+    openOptionsMenu() {
+        if (this.creditsModal.visible) this.creditsModal.setVisible(false);
+        this.isModalOpen = true;
+        this.isResetConfirming = false;
+        this.resetScoreBtn.setTexture('resetBtnTex');
+        this.menuHintText.setText(ASSETS_CONFIG.text.menuHintDefault).setColor('#aaaaaa');
+        this.refreshOptionsMenuUI();
+        this.menuModal.setVisible(true).setAlpha(0);
+        this.playSound('menuClick');
+        this.tweens.add({ targets: this.menuModal, alpha: 1, duration: 150 });
+    }
+
+    closeOptionsMenu() {
+        this.playSound('menuClick');
+        this.isModalOpen = false;
+        this.menuModal.setVisible(false);
+    }
+
+    buildCreditsModal() {
+        this.creditsModal = this.add.container(0, 0).setDepth(100).setVisible(false);
+
+        const overlay = this.add.rectangle(150, 125, 300, 250, 0x000000, 0.88).setInteractive();
+        const panel = this.add.image(150, 125, 'creditsBg').setDisplaySize(260, 200);
+        const modalLogo = this.add.image(150, 70, 'creditsLogo').setDisplaySize(140, 50);
+
+        const closeBtn = this.add.image(265, 40, 'closeBtn')
+            .setDisplaySize(24, 24)
+            .setInteractive({ useHandCursor: true });
+
+        closeBtn.on('pointerdown', (pointer, localX, localY, event) => {
+            event.stopPropagation();
+            this.closeCredits();
+        });
+
+        this.creditsModal.add([overlay, panel, modalLogo, closeBtn]);
+
+        let startY = 120;
+        ASSETS_CONFIG.credits.forEach(lineText => {
+            let txt = this.add.text(150, startY, lineText, {
+                fontFamily: ASSETS_CONFIG.fontFamily,
+                fontSize: '11px',
+                color: '#cccccc',
+                fontStyle: 'bold',
+                align: 'center'
+            }).setOrigin(0.5);
+            this.creditsModal.add(txt);
+            startY += 24;
+        });
+    }
+
+    openCredits() {
+        if (this.menuModal && this.menuModal.visible) this.menuModal.setVisible(false);
+        this.isModalOpen = true;
+        this.creditsModal.setVisible(true).setAlpha(0);
+        this.playSound('menuClick');
+        this.tweens.add({ targets: this.creditsModal, alpha: 1, duration: 150 });
+    }
+
+    closeCredits() {
+        this.playSound('menuClick');
+        this.isModalOpen = false;
+        this.creditsModal.setVisible(false);
+    }
+
+    toggleMute() {
+        this.isMuted = !this.isMuted;
+        localStorage.setItem('grimy_stomp_muted', this.isMuted);
+        this.menuMuteBtn.setTexture(this.isMuted ? 'muteOn' : 'muteOff').setDisplaySize(22, 22);
+        if (!this.isMuted) this.playSound('menuClick');
+    }
+
+    playSound(key) {
+        if (this.isMuted) return;
+        const audio = LOADED_HTML_AUDIO[key];
+        if (audio) {
+            audio.currentTime = 0;
+            audio.play().catch(() => {});
+        } else {
+            this.playSynthFallback(key);
+        }
+    }
+
+    playSynthFallback(key) {
+        try {
+            const ctx = this.sound.context;
+            if (!ctx) return;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            const now = ctx.currentTime;
+            if (key === 'crushWin') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.exponentialRampToValueAtTime(760, now + 0.14);
+                gain.gain.setValueAtTime(0.18, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.14);
+                osc.start(now);
+                osc.stop(now + 0.14);
+            } else if (key === 'impaleScream' || key === 'roundOver') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(480, now);
+                osc.frequency.linearRampToValueAtTime(90, now + 0.26);
+                gain.gain.setValueAtTime(0.22, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.26);
+                osc.start(now);
+                osc.stop(now + 0.26);
+            } else if (key === 'hazardSlide') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(410, now);
+                osc.frequency.exponentialRampToValueAtTime(175, now + 0.085);
+                gain.gain.setValueAtTime(0.13, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.085);
+                osc.start(now);
+                osc.stop(now + 0.085);
+            } else if (key === 'bootWhoosh' || key === 'canSlide') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(240, now);
+                osc.frequency.exponentialRampToValueAtTime(110, now + 0.07);
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.07);
+                osc.start(now);
+                osc.stop(now + 0.07);
+            } else {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(680, now);
+                osc.frequency.exponentialRampToValueAtTime(920, now + 0.04);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.04);
+                osc.start(now);
+                osc.stop(now + 0.04);
+            }
+        } catch (e) {}
+    }
+
+    createFallbackTextures() {
+        const g = this.make.graphics({ x: 0, y: 0, add: false });
+        const m = ASSETS_CONFIG.metrics;
+        const t = ASSETS_CONFIG.text;
+        const font = ASSETS_CONFIG.fontFamily;
+
+        if (!this.textures.exists('background')) {
+            g.clear();
+            g.fillStyle(0x0c0c0e, 1);
+            g.fillRect(0, 0, 300, 250);
+            g.fillStyle(0x1a1a1f, 1);
+            g.fillRect(0, 194, 300, 56);
+            g.lineStyle(2, 0x2e2e36, 1);
+            g.lineBetween(0, 194, 300, 194);
+            g.generateTexture('background', 300, 250);
+        }
+
+        if (!this.textures.exists('bloodDrop')) {
+            const bw = m.bloodDropWidth;
+            const bh = m.bloodDropHeight;
+            const canvas = this.textures.createCanvas('bloodDrop', bw, bh);
+            const ctx = canvas.context;
+
+            ctx.fillStyle = '#e60026';
+            ctx.beginPath();
+            ctx.moveTo(bw / 2, 1);
+            ctx.quadraticCurveTo(bw - 1, bh * 0.55, bw / 2, bh - 1);
+            ctx.quadraticCurveTo(1, bh * 0.55, bw / 2, 1);
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(255, 180, 195, 0.75)';
+            ctx.beginPath();
+            ctx.arc(bw * 0.38, bh * 0.62, 1.4, 0, Math.PI * 2);
+            ctx.fill();
+            canvas.refresh();
+        }
+
+        if (!this.textures.exists('stompBoot')) {
+            g.clear();
+            g.fillStyle(0x182644, 1);
+            g.lineStyle(2, 0x334c7a, 1);
+            g.fillRect(16, 0, 32, 118);
+            g.strokeRect(16, 0, 32, 118);
+            g.fillStyle(0x18181c, 1);
+            g.lineStyle(2, 0x555555, 1);
+            g.fillRoundedRect(14, 112, 36, 58, 4);
+            g.strokeRoundedRect(14, 112, 36, 58, 4);
+            g.fillRoundedRect(4, 164, 56, 26, 6);
+            g.strokeRoundedRect(4, 164, 56, 26, 6);
+            g.lineStyle(2, 0x00ffcc, 1);
+            for (let y = 122; y <= 156; y += 7) {
+                g.lineBetween(20, y, 44, y);
+            }
+            g.fillStyle(0x33333b, 1);
+            g.fillRect(4, 190, 56, 9);
+            g.generateTexture('stompBoot', m.bootWidth, m.bootHeight);
+        }
+
+        if (!this.textures.exists('stompBootBloody')) {
+            g.clear();
+            g.fillStyle(0x182644, 1);
+            g.lineStyle(2, 0x334c7a, 1);
+            g.fillRect(16, 0, 32, 118);
+            g.strokeRect(16, 0, 32, 118);
+            g.fillStyle(0x18181c, 1);
+            g.lineStyle(2, 0xff0055, 1);
+            g.fillRoundedRect(14, 112, 36, 58, 4);
+            g.strokeRoundedRect(14, 112, 36, 58, 4);
+            g.fillRoundedRect(4, 164, 56, 26, 6);
+            g.strokeRoundedRect(4, 164, 56, 26, 6);
+            g.lineStyle(2, 0xff0055, 1);
+            for (let y = 122; y <= 156; y += 7) {
+                g.lineBetween(20, y, 44, y);
+            }
+            g.fillStyle(0xd90026, 1);
+            g.fillRect(4, 184, 56, 15);
+            g.fillCircle(18, 178, 7);
+            g.fillCircle(36, 181, 9);
+            g.fillCircle(48, 176, 6);
+            g.fillStyle(0xcccccc, 1);
+            g.fillTriangle(44, 164, 50, 164, 47, 148);
+            g.generateTexture('stompBootBloody', m.bootWidth, m.bootHeight);
+        }
+
+        ASSETS_CONFIG.cans.forEach((canCfg) => {
+            if (!this.textures.exists(canCfg.key)) {
+                g.clear();
+                g.fillStyle(canCfg.color, 1);
+                g.lineStyle(2, 0xffffff, 1);
+                g.fillRoundedRect(6, 5, 34, 54, 5);
+                g.strokeRoundedRect(6, 5, 34, 54, 5);
+                g.fillStyle(canCfg.labelColor, 1);
+                g.fillRect(8, 20, 30, 22);
+                g.fillStyle(0xdddddd, 1);
+                g.fillRect(10, 2, 26, 4);
+                g.generateTexture(canCfg.key, m.canWidth, m.canHeight);
+            }
+
+            if (!this.textures.exists(canCfg.crushedKey)) {
+                g.clear();
+                g.fillStyle(canCfg.color, 1);
+                g.lineStyle(2, 0xffffff, 1);
+                g.fillRoundedRect(2, 6, 48, 18, 4);
+                g.strokeRoundedRect(2, 6, 48, 18, 4);
+                g.fillStyle(canCfg.labelColor, 1);
+                g.fillRect(8, 10, 36, 10);
+                g.generateTexture(canCfg.crushedKey, m.crushedWidth, m.crushedHeight);
+            }
+        });
+
+        if (!this.textures.exists('defaultCrushedCan')) {
+            g.clear();
+            g.fillStyle(0x00ffcc, 1);
+            g.lineStyle(2, 0xffffff, 1);
+            g.fillRoundedRect(2, 6, 48, 18, 4);
+            g.strokeRoundedRect(2, 6, 48, 18, 4);
+            g.generateTexture('defaultCrushedCan', m.crushedWidth, m.crushedHeight);
+        }
+
+        if (!this.textures.exists('hazard1')) {
+            g.clear();
+            g.fillStyle(0x6e4726, 1);
+            g.lineStyle(2, 0x3b2311, 1);
+            g.fillRoundedRect(4, 42, 40, 12, 2);
+            g.strokeRoundedRect(4, 42, 40, 12, 2);
+            g.fillStyle(0xd9dadf, 1);
+            g.fillTriangle(20, 42, 28, 42, 24, 4);
+            g.lineStyle(1.5, 0xff0055, 1);
+            g.strokeTriangle(20, 42, 28, 42, 24, 4);
+            g.generateTexture('hazard1', m.hazardWidth, m.hazardHeight);
+        }
+
+        if (!this.textures.exists('hazard2')) {
+            g.clear();
+            g.fillStyle(0x1f7a3a, 0.9);
+            g.lineStyle(2, 0x66ff99, 1);
+            g.beginPath();
+            g.moveTo(8, 54);
+            g.lineTo(8, 22);
+            g.lineTo(15, 8);
+            g.lineTo(23, 26);
+            g.lineTo(31, 6);
+            g.lineTo(40, 24);
+            g.lineTo(40, 54);
+            g.closePath();
+            g.fillPath();
+            g.strokePath();
+            g.generateTexture('hazard2', m.hazardWidth, m.hazardHeight);
+        }
+
+        if (!this.textures.exists('hazard3')) {
+            g.clear();
+            g.fillStyle(0xeeeeee, 0.85);
+            g.lineStyle(2, 0xff0055, 1);
+            g.fillRect(17, 22, 14, 26);
+            g.strokeRect(17, 22, 14, 26);
+            g.fillStyle(0xff0055, 1);
+            g.fillRect(19, 30, 10, 16);
+            g.fillRect(13, 48, 22, 5);
+            g.lineStyle(2, 0xffffff, 1);
+            g.lineBetween(24, 22, 24, 3);
+            g.generateTexture('hazard3', m.hazardWidth, m.hazardHeight);
+        }
+
+        // Timer Bar Fallback Textures
+        if (!this.textures.exists('roundTimerBg')) {
+            const canvas = this.textures.createCanvas('roundTimerBg', 300, 5);
+            const ctx = canvas.context;
+            ctx.fillStyle = '#111111';
+            ctx.fillRect(0, 0, 300, 5);
+            canvas.refresh();
+        }
+
+        if (!this.textures.exists('roundTimerFill')) {
+            const canvas = this.textures.createCanvas('roundTimerFill', 296, 3);
+            const ctx = canvas.context;
+            ctx.fillStyle = '#00ffcc';
+            ctx.fillRect(0, 0, 296, 3);
+            canvas.refresh();
+        }
+
+        if (!this.textures.exists('itemTimerBg')) {
+            const canvas = this.textures.createCanvas('itemTimerBg', 88, 8);
+            const ctx = canvas.context;
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, 88, 8);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(0.5, 0.5, 87, 7);
+            canvas.refresh();
+        }
+
+        if (!this.textures.exists('itemTimerFill')) {
+            const canvas = this.textures.createCanvas('itemTimerFill', 84, 4);
+            const ctx = canvas.context;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 84, 4);
+            canvas.refresh();
+        }
+
+        const makeBoxBtnTex = (key, width, height, label, borderColor, textColor = borderColor, fontSize = 8.5, bgHex = '#222222') => {
+            if (this.textures.exists(key)) return;
+            const canvas = this.textures.createCanvas(key, width, height);
+            const ctx = canvas.context;
+            ctx.fillStyle = bgHex;
+            ctx.fillRect(0, 0, width, height);
+            ctx.strokeStyle = borderColor;
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(0.75, 0.75, width - 1.5, height - 1.5);
+            ctx.fillStyle = textColor;
+            ctx.font = `900 ${fontSize}px ${font}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, width / 2, height / 2 + 0.5);
+            canvas.refresh();
+        };
+
+        makeBoxBtnTex('playBtn', 104, 30, t.playBtnLabel, '#00ffcc', '#00ffcc', 13, '#102822');
+        makeBoxBtnTex('exitBtn', m.exitBtnWidth, m.exitBtnHeight, t.exitBtnLabel, '#ff0055', '#ffffff', 8.5, '#2b0f18');
+        makeBoxBtnTex('menuBtn', 22, 22, t.menuBtnLabel, '#00ffcc', '#ffffff', 12);
+        makeBoxBtnTex('resetBtnTex', 64, 18, t.resetBtnLabel, '#ff0055', '#ff99aa', 8.5);
+        makeBoxBtnTex('resetConfirmTex', 64, 18, t.resetConfirmLabel, '#ffdd00', '#ffdd00', 8.5);
+
+        if (!this.textures.exists('titleLogo')) {
+            const canvas = this.textures.createCanvas('titleLogo', 184, 50);
+            const ctx = canvas.context;
+            ctx.fillStyle = '#ff0055';
+            ctx.fillRect(0, 0, 184, 50);
+            ctx.strokeStyle = '#00ffcc';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(1.5, 1.5, 181, 47);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `900 20px ${font}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(t.gameTitle, 92, 26);
+            canvas.refresh();
+        }
+
+        if (!this.textures.exists('menuTitleImg')) {
+            const canvas = this.textures.createCanvas('menuTitleImg', 170, 22);
+            const ctx = canvas.context;
+            ctx.fillStyle = '#00ffcc';
+            ctx.font = `900 12px ${font}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(t.menuTitle, 85, 11);
+            canvas.refresh();
+        }
+
+        if (!this.textures.exists('menuBg')) {
+            g.clear();
+            g.fillStyle(0x111115, 1);
+            g.lineStyle(2, 0x00ffcc, 1);
+            g.fillRoundedRect(0, 0, 260, 190, 8);
+            g.strokeRoundedRect(0, 0, 260, 190, 8);
+            g.generateTexture('menuBg', 260, 190);
+        }
+
+        if (!this.textures.exists('creditsBg')) {
+            g.clear();
+            g.fillStyle(0x111111, 1);
+            g.lineStyle(2, 0x333333, 1);
+            g.fillRoundedRect(0, 0, 260, 200, 8);
+            g.strokeRoundedRect(0, 0, 260, 200, 8);
+            g.generateTexture('creditsBg', 260, 200);
+        }
+
+        if (!this.textures.exists('closeBtn')) {
+            g.clear();
+            g.fillStyle(0xff0055, 1);
+            g.fillCircle(12, 12, 12);
+            g.lineStyle(2, 0xffffff, 1);
+            g.lineBetween(8, 8, 16, 16);
+            g.lineBetween(16, 8, 8, 16);
+            g.generateTexture('closeBtn', 24, 24);
+        }
+
+        if (!this.textures.exists('playerIcon')) {
+            g.clear();
+            g.fillStyle(0xffffff, 1);
+            g.fillCircle(8, 8, 7);
+            g.fillStyle(0x181818, 1);
+            g.fillCircle(5.5, 6.5, 1.2);
+            g.fillCircle(10.5, 6.5, 1.2);
+            g.lineStyle(1.5, 0x181818, 1);
+            g.beginPath();
+            g.arc(8, 8.5, 3.5, 0.2, Math.PI - 0.2, false);
+            g.strokePath();
+            g.generateTexture('playerIcon', 16, 16);
+        }
+
+        if (!this.textures.exists('worldIcon')) {
+            g.clear();
+            g.lineStyle(1.5, 0xffffff, 1);
+            g.strokeCircle(8, 8, 6.5);
+            g.lineBetween(1.5, 8, 14.5, 8);
+            g.lineBetween(8, 1.5, 8, 14.5);
+            g.strokeEllipse(8, 8, 6.5, 12);
+            g.generateTexture('worldIcon', 16, 16);
+        }
+
+        if (!this.textures.exists('creditsLogo')) {
+            g.clear();
+            g.fillStyle(0xff0055, 1);
+            g.fillRoundedRect(0, 0, 140, 50, 8);
+            g.generateTexture('creditsLogo', 140, 50);
+        }
+
+        if (!this.textures.exists('creditsBtn')) {
+            g.clear();
+            g.fillStyle(0x333333, 1);
+            g.fillRoundedRect(0, 0, 48, 16, 4);
+            g.lineStyle(1, 0x00ffcc, 1);
+            g.strokeRoundedRect(0, 0, 48, 16, 4);
+            g.generateTexture('creditsBtn', 48, 16);
+        }
+
+        if (!this.textures.exists('muteOff')) {
+            g.clear();
+            g.fillStyle(0x222222, 1);
+            g.lineStyle(1.5, 0x00ffcc, 1);
+            g.fillRoundedRect(0, 0, 22, 22, 4);
+            g.strokeRoundedRect(0, 0, 22, 22, 4);
+            g.fillStyle(0x00ffcc, 1);
+            g.fillTriangle(5, 11, 12, 5, 12, 17);
+            g.lineBetween(15, 7, 17, 15);
+            g.generateTexture('muteOff', 22, 22);
+        }
+
+        if (!this.textures.exists('muteOn')) {
+            g.clear();
+            g.fillStyle(0x222222, 1);
+            g.lineStyle(1.5, 0xff0055, 1);
+            g.fillRoundedRect(0, 0, 22, 22, 4);
+            g.strokeRoundedRect(0, 0, 22, 22, 4);
+            g.fillStyle(0x777777, 1);
+            g.fillTriangle(5, 11, 12, 5, 12, 17);
+            g.lineStyle(2, 0xff0055, 1);
+            g.lineBetween(14, 7, 19, 15);
+            g.lineBetween(19, 7, 14, 15);
+            g.generateTexture('muteOn', 22, 22);
+        }
+
+        g.destroy();
+    }
+
+    async fetchWorldScore() {
+        try {
+            const url = `https://api.counterapi.dev/v1/${GLOBAL_API_NAMESPACE}/${GLOBAL_API_KEY}`;
+            const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache' }, cache: 'no-store' });
+            if (res.ok) {
+                const data = await res.json();
+                const serverCount = data.count !== undefined ? data.count : data.value;
+                if (typeof serverCount === 'number') {
+                    this.worldScore = Math.max(this.worldScore, serverCount);
+                    this.worldScoreText.setText(`${this.worldScore + WORLD_SCORE_OFFSET}`);
+                }
+            } else if (res.status === 404 && this.worldScore === 0) {
+                this.worldScoreText.setText(`${WORLD_SCORE_OFFSET}`);
+            }
+        } catch (e) {
+            if (this.worldScore === 0) this.worldScoreText.setText(`${WORLD_SCORE_OFFSET}`);
+        }
+    }
+
+    async incrementWorldScore() {
+        this.worldScore++;
+        this.worldScoreText.setText(`${this.worldScore + WORLD_SCORE_OFFSET}`);
+        try {
+            const url = `https://api.counterapi.dev/v1/${GLOBAL_API_NAMESPACE}/${GLOBAL_API_KEY}/up`;
+            const res = await fetch(url, { headers: { 'Cache-Control': 'no-cache' }, cache: 'no-store' });
+            if (res.ok) {
+                const data = await res.json();
+                const serverCount = data.count !== undefined ? data.count : data.value;
+                if (typeof serverCount === 'number') {
+                    this.worldScore = Math.max(this.worldScore, serverCount);
+                    this.worldScoreText.setText(`${this.worldScore + WORLD_SCORE_OFFSET}`);
+                }
+            }
+        } catch (e) {
+            console.warn("Global server increment blocked or offline.");
+        }
+    }
+}
+
+// ============================================================================
+// 4. BOOTSTRAP GAME
+// ============================================================================
+preloadLocalAssets(() => {
+    const config = {
+        type: Phaser.CANVAS,
+        width: 300,
+        height: 250,
+        parent: 'game-container',
+        backgroundColor: '#080808',
+        render: {
+            antialias: true,
+            roundPixels: true
+        },
+        scene: [StompGame]
+    };
+    new Phaser.Game(config);
+});
+</script>
+
+</body>
+</html>
