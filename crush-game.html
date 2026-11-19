@@ -91,6 +91,7 @@ const ASSETS_CONFIG = {
         titleHighScorePrefix:  "HIGH SCORE: ",
         titleBestStreakPrefix: "BEST STREAK: ",
         timesUpHeader:         "TIME'S UP! SCORE: ",
+        impaledOutHeader:      "3 STRIKES! SCORE: ",
         newRecordHeader:       "NEW HIGH SCORE: ",
 
         // Only alerts shown during gameplay
@@ -108,7 +109,7 @@ const ASSETS_CONFIG = {
         resetBtnLabel:         "RESET",
         resetConfirmLabel:     "SURE?!",
         resetDoneMsg:          "HIGH SCORE WIPED!",
-        menuHintDefault:       "30s ROUND: STOMP CANS (+1) | AVOID NAILS (-1)",
+        menuHintDefault:       "30s ROUND: STOMP CANS (+1) | 3 HAZARDS = OUT",
         menuBtnLabel:          "☰"
     },
 
@@ -140,6 +141,8 @@ const ASSETS_CONFIG = {
         stompBoot:         'img/crush/stomp-boot.png',          // 64x200 tall boot + leg (extends offscreen!)
         stompBootBloody:   'img/crush/stomp-boot-bloody.png',   // 64x200 bloody impaled boot + leg!
         defaultCrushedCan: 'img/crush/can-flat-default.png',    // 52x26 optional shared crushed can
+        lifeIcon:          'img/crush/life-icon.png',           // 14x14 remaining life icon
+        lifeLostIcon:      'img/crush/life-lost-icon.png',      // 14x14 lost life icon
 
         // CUSTOMIZABLE TIMER BAR IMAGES & SIZES
         roundTimerBg:      'img/crush/round-timer-bg.png',      // 300x5 Round Timer Bar BG
@@ -166,14 +169,15 @@ const ASSETS_CONFIG = {
         crushWin:     'audio/crush/can-crush.wav',      // Crunch sound when a can is stomped
         impaleScream: 'audio/crush/foot-impale.wav',    // Pain sound when hitting a nail/hazard!
         canSlide:     'audio/bottle-slide.wav',         // Sound when a CAN slides in/out
-        hazardSlide:  'audio/bottle-slide.wav',   // Distinct sound when a HAZARD slides in/out!
+        hazardSlide:  'audio/bottle-slide.wav',         // Distinct sound when a HAZARD slides in/out!
         timerTick:    'audio/graffiti/nozzle-click.wav',// Last 5 seconds countdown tick
-        roundOver:    'audio/success.wav',          // End of 30s round buzzer
+        roundOver:    'audio/success.wav',              // End of 30s round buzzer
         menuClick:    'audio/graffiti/nozzle-click.wav' // UI click sound
     },
 
     gameplay: {
         roundDuration: 30000,          // 30.0 seconds (30000ms) per game round!
+        maxHazardHits: 3,              // Game ends if the player hits a hazard 3 times!
         canStayDuration: 500,          // 500ms before the can slides away!
         hazardStayDuration: 700,       // 700ms before the hazard slides away!
         slideInDuration: 105,          // Fast slide-in so 500ms feels super snappy
@@ -188,6 +192,7 @@ const ASSETS_CONFIG = {
     metrics: {
         // Top HUD Positions
         topHudY: 18,
+        livesY: 18,                    // 3 Hazard Life Icons centered in top HUD
         creditsBtnX: 34,
         exitBtnX: 34,                  // Exit button placed under credits button (Y: 42)
         exitBtnY: 42,
@@ -312,6 +317,9 @@ class StompGame extends Phaser.Scene {
         this.gameState = 'TITLE'; // 'TITLE' or 'PLAYING'
         this.roundTimeRemaining = ASSETS_CONFIG.gameplay.roundDuration;
         this.lastWholeSecond = 30;
+        this.hazardHits = 0;
+        this.isEndingRound = false;
+        this.roundEndTimer = null;
 
         this.currentStreak = 0;
         this.isMuted = localStorage.getItem('grimy_stomp_muted') === 'true';
@@ -342,7 +350,7 @@ class StompGame extends Phaser.Scene {
         this.add.image(150, 125, 'background').setDisplaySize(300, 250).setDepth(0);
         this.curbStainGraphics = this.add.graphics().setDepth(2);
 
-        // 2. TOP HUD (Credits on Left, Menu on Right)
+        // 2. TOP HUD (Credits on Left, Hazard Lives Center, Menu on Right)
         this.creditsBtn = this.add.image(m.creditsBtnX, m.topHudY, 'creditsBtn')
             .setDisplaySize(48, 16)
             .setInteractive({ useHandCursor: true })
@@ -353,6 +361,19 @@ class StompGame extends Phaser.Scene {
             this.unlockWebAudio();
             this.openCredits();
         });
+
+        // 3 Hazard Life Icons centered in the top HUD
+        this.lifeIcons = [];
+        const maxHits = ASSETS_CONFIG.gameplay.maxHazardHits || 3;
+        const iconSpacing = 18;
+        const startX = 150 - ((maxHits - 1) * iconSpacing) / 2;
+        for (let i = 0; i < maxHits; i++) {
+            const icon = this.add.image(startX + i * iconSpacing, m.livesY, 'lifeIcon')
+                .setDisplaySize(14, 14)
+                .setDepth(65)
+                .setVisible(false);
+            this.lifeIcons.push(icon);
+        }
 
         // Exit button placed under credits button
         this.exitBtn = this.add.image(m.exitBtnX, m.exitBtnY, 'exitBtn')
@@ -455,7 +476,7 @@ class StompGame extends Phaser.Scene {
         // 9. Input Listeners
         this.input.on('pointerdown', (pointer, currentlyOver) => {
             this.unlockWebAudio();
-            if (this.isModalOpen || this.gameState !== 'PLAYING') return;
+            if (this.isModalOpen || this.gameState !== 'PLAYING' || this.isEndingRound) return;
             if (
                 currentlyOver.includes(this.menuBtn) ||
                 currentlyOver.includes(this.creditsBtn) ||
@@ -468,7 +489,7 @@ class StompGame extends Phaser.Scene {
 
         this.input.keyboard.on('keydown-SPACE', () => {
             this.unlockWebAudio();
-            if (this.isModalOpen) return;
+            if (this.isModalOpen || this.isEndingRound) return;
             if (this.gameState === 'TITLE') {
                 this.playSound('menuClick');
                 this.startRound();
@@ -498,6 +519,17 @@ class StompGame extends Phaser.Scene {
                 this.sound.context.resume();
             }
         } catch (e) {}
+    }
+
+    updateLivesHUD() {
+        const maxHits = ASSETS_CONFIG.gameplay.maxHazardHits || 3;
+        const remaining = Math.max(0, maxHits - this.hazardHits);
+        this.lifeIcons.forEach((icon, idx) => {
+            const isAlive = idx < remaining;
+            icon.setTexture(isAlive ? 'lifeIcon' : 'lifeLostIcon');
+            icon.setDisplaySize(14, 14);
+            icon.setAlpha(isAlive ? 1 : 0.75);
+        });
     }
 
     buildTitleScreen() {
@@ -557,6 +589,13 @@ class StompGame extends Phaser.Scene {
 
     cleanupActiveRoundObjects() {
         this.canInteract = false;
+        this.isEndingRound = false;
+
+        if (this.roundEndTimer) {
+            this.roundEndTimer.remove(false);
+            this.roundEndTimer = null;
+        }
+
         this.roundTimerBgImg.setVisible(false);
         this.roundTimerFillImg.setVisible(false);
         this.itemTimerBgImg.setVisible(false);
@@ -591,17 +630,20 @@ class StompGame extends Phaser.Scene {
         this.showTitleScreen(false);
     }
 
-    showTitleScreen(fromRoundEnd = false, isNewBest = false) {
+    showTitleScreen(fromRoundEnd = false, isNewBest = false, endReason = 'time') {
         this.gameState = 'TITLE';
         this.cleanupActiveRoundObjects();
         this.roundTimerText.setVisible(false);
         this.exitBtn.setVisible(false);
+        this.lifeIcons.forEach(icon => icon.setVisible(false));
 
         const t = ASSETS_CONFIG.text;
         const hs = ASSETS_CONFIG.highScoreStyle;
         if (fromRoundEnd) {
             if (isNewBest) {
                 this.titleResultText.setText(`${t.newRecordHeader}${this.playerScore} CANS!`).setColor('#00ffcc');
+            } else if (endReason === 'hazards') {
+                this.titleResultText.setText(`${t.impaledOutHeader}${this.playerScore} CANS`).setColor('#ff0055');
             } else {
                 this.titleResultText.setText(`${t.timesUpHeader}${this.playerScore} CANS`).setColor('#ff0055');
             }
@@ -630,6 +672,10 @@ class StompGame extends Phaser.Scene {
 
         this.playerScore = 0;
         this.currentStreak = 0;
+        this.hazardHits = 0;
+        this.updateLivesHUD();
+        this.lifeIcons.forEach(icon => icon.setVisible(true).setScale(1));
+
         this.playerScoreText.setText('0').setColor('#ffffff').setScale(1);
         this.statusText.setText('');
 
@@ -645,7 +691,7 @@ class StompGame extends Phaser.Scene {
         this.spawnNextItem(true);
     }
 
-    endRound() {
+    endRound(reason = 'time') {
         this.gameState = 'TITLE';
         this.playSound('roundOver');
         this.cameras.main.shake(150, 0.013);
@@ -656,7 +702,7 @@ class StompGame extends Phaser.Scene {
             isNewBest = true;
         }
         this.saveLocalScores();
-        this.showTitleScreen(true, isNewBest);
+        this.showTitleScreen(true, isNewBest, reason);
     }
 
     showAlert(message, colorHex = '#00ffcc') {
@@ -692,7 +738,7 @@ class StompGame extends Phaser.Scene {
     }
 
     spawnNextItem(slideIn = true) {
-        if (this.gameState !== 'PLAYING') return;
+        if (this.gameState !== 'PLAYING' || this.isEndingRound) return;
 
         const g = ASSETS_CONFIG.gameplay;
         const m = ASSETS_CONFIG.metrics;
@@ -738,7 +784,7 @@ class StompGame extends Phaser.Scene {
                 duration: g.slideInDuration || 105,
                 ease: 'Quad.easeOut',
                 onComplete: () => {
-                    if (this.gameState === 'PLAYING') {
+                    if (this.gameState === 'PLAYING' && !this.isEndingRound) {
                         this.canInteract = true;
                     }
                 }
@@ -790,7 +836,7 @@ class StompGame extends Phaser.Scene {
             this.shockwaveGraphics.strokeEllipse(sw.x, sw.y, sw.radius * 2, sw.radius * 0.75);
         }
 
-        if (this.gameState !== 'PLAYING' || this.isModalOpen) {
+        if (this.gameState !== 'PLAYING' || this.isModalOpen || this.isEndingRound) {
             return;
         }
 
@@ -811,7 +857,7 @@ class StompGame extends Phaser.Scene {
         this.roundTimerFillImg.setDisplaySize(296 * roundPct, 3);
 
         if (this.roundTimeRemaining <= 0) {
-            this.endRound();
+            this.endRound('time');
             return;
         }
 
@@ -858,7 +904,7 @@ class StompGame extends Phaser.Scene {
     }
 
     triggerStomp() {
-        if (!this.canInteract || this.isModalOpen || this.gameState !== 'PLAYING') return;
+        if (!this.canInteract || this.isModalOpen || this.gameState !== 'PLAYING' || this.isEndingRound) return;
         this.canInteract = false;
         this.itemTimerBgImg.setVisible(false);
         this.itemTimerFillImg.setVisible(false);
@@ -965,6 +1011,7 @@ class StompGame extends Phaser.Scene {
         const m = ASSETS_CONFIG.metrics;
         const t = ASSETS_CONFIG.text;
         const g = ASSETS_CONFIG.gameplay;
+        const maxHits = g.maxHazardHits || 3;
 
         this.playSound('impaleScream');
         this.cameras.main.shake(180, 0.02);
@@ -1000,6 +1047,22 @@ class StompGame extends Phaser.Scene {
             });
         }
 
+        this.hazardHits++;
+        this.updateLivesHUD();
+        const lostIconIdx = maxHits - this.hazardHits;
+        if (this.lifeIcons[lostIconIdx]) {
+            const lostIcon = this.lifeIcons[lostIconIdx];
+            this.tweens.killTweensOf(lostIcon);
+            lostIcon.setScale(1.45);
+            this.tweens.add({
+                targets: lostIcon,
+                scaleX: 1,
+                scaleY: 1,
+                duration: 200,
+                ease: 'Back.easeOut'
+            });
+        }
+
         this.currentStreak = 0;
         if (g.allowNegativeScore) {
             this.playerScore--;
@@ -1009,7 +1072,29 @@ class StompGame extends Phaser.Scene {
         this.saveLocalScores();
         this.playerScoreText.setText(`${this.playerScore}`).setColor('#ff0055');
 
-        this.showAlert(t.impaledStatus, '#ff0055');
+        if (this.hazardHits >= maxHits) {
+            this.isEndingRound = true;
+            this.showAlert(`${t.impaledStatus} (${this.hazardHits}/${maxHits})`, '#ff0055');
+            this.spawnFloatingText(m.targetX, m.curbY - 14, `${this.hazardHits}/${maxHits} OUT!`, '#ff0055', '14px');
+
+            this.tweens.add({
+                targets: this.boot,
+                y: m.bootRestY,
+                displayWidth: m.bootWidth,
+                displayHeight: m.bootHeight,
+                angle: -7,
+                delay: 140,
+                duration: 210,
+                ease: 'Sine.easeOut'
+            });
+
+            this.roundEndTimer = this.time.delayedCall(520, () => {
+                this.endRound('hazards');
+            });
+            return;
+        }
+
+        this.showAlert(`${t.impaledStatus} (${this.hazardHits}/${maxHits})`, '#ff0055');
         this.spawnFloatingText(m.targetX, m.curbY - 14, '-1 OUCH!', '#ff0055', '14px');
 
         this.tweens.add({
@@ -1308,6 +1393,30 @@ class StompGame extends Phaser.Scene {
             g.lineStyle(2, 0x2e2e36, 1);
             g.lineBetween(0, 194, 300, 194);
             g.generateTexture('background', 300, 250);
+        }
+
+        if (!this.textures.exists('lifeIcon')) {
+            g.clear();
+            g.fillStyle(0x111116, 1);
+            g.lineStyle(1.5, 0x00ffcc, 1);
+            g.fillRoundedRect(1, 1, 12, 12, 3);
+            g.strokeRoundedRect(1, 1, 12, 12, 3);
+            g.fillStyle(0x00ffcc, 1);
+            g.fillRect(4, 3, 4, 6);
+            g.fillRect(4, 8, 7, 3);
+            g.generateTexture('lifeIcon', 14, 14);
+        }
+
+        if (!this.textures.exists('lifeLostIcon')) {
+            g.clear();
+            g.fillStyle(0x260b14, 1);
+            g.lineStyle(1.5, 0xff0055, 1);
+            g.fillRoundedRect(1, 1, 12, 12, 3);
+            g.strokeRoundedRect(1, 1, 12, 12, 3);
+            g.lineStyle(2, 0xff0055, 1);
+            g.lineBetween(4, 4, 10, 10);
+            g.lineBetween(10, 4, 4, 10);
+            g.generateTexture('lifeLostIcon', 14, 14);
         }
 
         if (!this.textures.exists('bloodDrop')) {
